@@ -130,7 +130,7 @@ impl Deck {
                 suit: Suit::Special
             });
             deck.push(Card {
-                name: String::from("j"),
+                name: String::from("Je"),
                 value: 0,
                 suit: Suit::Special
             });
@@ -172,7 +172,7 @@ fn main() {
         players.rotate_left(rotation);
         round.dealer = String::from(&players[0].name);
 
-        // Get newly shuffled deck.
+        // Shuffle new deck.
         let mut deck = Deck { cards: fresh_pack_of_cards.clone() };
         deck.cards = Deck::shuffle(deck.cards);
 
@@ -191,8 +191,12 @@ fn main() {
 
         // Flip top card to set trump.
         let top_card = match deck.cards.pop() {
-            Some(c) => {c.unwrap();},
-            None() => Card::default()
+            Some(c) => c,
+            None => Card {
+                name: String::from("No Trump"),
+                value: 0,
+                suit: Suit::Special
+            }
         };
         round.trump = top_card;
 
