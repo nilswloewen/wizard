@@ -6,7 +6,7 @@ use rand::thread_rng;
 use rand::Rng;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Suit { Club, Diamond, Heart, Spade, Special }
+enum Suit { Club, Diamond, Heart, Spade, Wizard, Jester, None}
 impl Default for Suit {
     fn default() -> Self { Suit::Spade}
 }
@@ -18,7 +18,9 @@ impl Suit {
             Suit::Diamond => '♦',
             Suit::Heart => '♥',
             Suit::Spade => '♠',
-            Suit::Special => '~',
+            Suit::Wizard => 'W',
+            Suit::Jester => 'J',
+            Suit::None => 'N',
         }
     }
 }
@@ -33,14 +35,6 @@ struct Card {
     name: String,
     value: usize,
     suit: Suit
-}
-impl Card {
-    fn default() -> Self {
-        Card {name: String::from("A"), value: 14, suit: Suit::Spade }
-    }
-    pub fn print(&self) {
-        println!("{:>2} {:>6} {}", self.value, self.name, self.suit);
-    }
 }
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -72,12 +66,12 @@ impl Deck {
             deck.push(Card {
                 name: String::from("W"),
                 value: 15,
-                suit: Suit::Special
+                suit: Suit::Wizard
             });
             deck.push(Card {
                 name: String::from("Je"),
                 value: 0,
-                suit: Suit::Special
+                suit: Suit::Jester
             });
         }
 
@@ -91,12 +85,6 @@ impl Deck {
 
         cards = deck_slice.to_vec();
         cards
-    }
-
-    pub fn print(&self) {
-        for card in &self.cards {
-            card.print();
-        }
     }
 }
 
@@ -157,9 +145,15 @@ impl Round {
     }
 }
 
+#[derive(Clone)]
 struct CardPlayed {
     card: Card,
     player: usize
+}
+impl fmt::Display for CardPlayed {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}, {}", self.card, self.player)
+    }
 }
 
 fn main() {
@@ -194,12 +188,21 @@ fn main() {
             }
         }
 
+        // Set trump.
         round.trump = match deck.cards.pop() {
-            Some(card) => card,
+            Some(mut card) => {
+                if card.suit == Suit::Wizard {
+                    // Todo: Get input from dealer to choose trump.
+                    let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
+                    let rand_suit = rand::thread_rng().gen_range(0..suits.len());
+                    card.suit = suits[rand_suit];
+                }
+                card
+            },
             None => Card {
                 name: String::from("No Trump"),
                 value: 0,
-                suit: Suit::Special
+                suit: Suit::None
             }
         };
 
@@ -223,52 +226,56 @@ fn main() {
                 });
             }
 
-            // Calculate winner.
-            let mut winning_card = trick[0].card.clone();
-            let mut winning_player = trick[0].player;
-
-            // Break after first wizard is counted.
-            if winning_card.name.as_str() == "W" {
-                println!("Winning card: {}, player {}", winning_card, winning_player);
-            }
-            else {
-                let mut lead_suit: Suit = winning_card.suit.clone();
-                println!("\nLead suit: {}", lead_suit);
-
-                for played in trick {
-                    println!("Played: {} {}", played.card, played.player);
-                    // If Jester is lead take suit from first non-jester.
-                    if winning_card.name.as_str() == "Je" && played.card.name.as_str() != "Je" {
-                        winning_card = played.card.clone();
-                        lead_suit = played.card.suit.clone();
-                        println!("new Lead suit: {}", lead_suit);
-                        continue;
-                    }
-
-                    // Break after first wizard is counted.
-                    if played.card.name.as_str() == "W" {
-                        winning_card = played.card.clone();
-                        winning_player = played.player.clone();
-                        break;
-                    }
-
-                    // Follow suit...
-                    if played.card.suit == lead_suit {
-                        if played.card.value > winning_card.value {
-                            winning_card = played.card.clone();
-                            winning_player = played.player.clone();
-                        }
-                    }
-                }
-                println!("Winning card: {}, player {}", winning_card, winning_player);
-            }
+            let winner: CardPlayed = calc_winner_of_trick(round.trump.suit, trick);
+            println!("Winner: {}", winner);
         }
     }
 }
 
+fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed {
+    let mut winner: CardPlayed = trick[0].clone();
 
-fn bet(mut player: Player) -> Player {
-    player
+    let mut lead_suit: Suit = winner.card.suit;
+    println!("\nTrump: {}, Lead suit: {}", trump_suit, lead_suit);
+
+    for played in trick {
+        println!("Winner: {}", winner);
+        println!("Played: {} {}", played.card, played.player);
+
+        if played.card.suit == Suit::Wizard {
+            return played;
+        }
+        if played.card.suit == Suit::Jester {
+            continue;
+        }
+
+        // If Jester was lead take suit from first non-jester.
+        if winner.card.suit == Suit::Jester && played.card.suit != Suit::Jester {
+            winner.card = played.card.clone();
+            lead_suit = played.card.suit;
+            println!("new Lead suit: {}", lead_suit);
+            continue;
+        }
+
+        // If trump has already been played, compare against it.
+        if winner.card.suit == trump_suit {
+            if played.card.suit == trump_suit {
+                if played.card.value > winner.card.value {
+                    winner = played;
+                    continue;
+                }
+            }
+        }
+
+        // Follow suit...
+        if played.card.suit == lead_suit {
+            if played.card.value > winner.card.value {
+                winner = played;
+            }
+        }
+    }
+
+    winner
 }
 
 fn get_players() -> Vec<Player> {
