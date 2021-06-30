@@ -1,4 +1,3 @@
-//  ♠, ♥, ♣, ♦
 use std::env;
 use std::fmt;
 use rand::seq::SliceRandom;
@@ -30,6 +29,50 @@ impl fmt::Display for Suit {
     }
 }
 
+#[derive(Clone, Copy)]
+enum CardValue { Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace }
+impl CardValue {
+    fn symbol(self) -> &'static str {
+        match self {
+            CardValue::Two => "2",
+            CardValue::Three => "3",
+            CardValue::Four => "4",
+            CardValue::Five => "5",
+            CardValue::Six => "6",
+            CardValue::Seven => "7",
+            CardValue::Eight => "8",
+            CardValue::Nine => "9",
+            CardValue::Ten => "10",
+            CardValue::Jack => "J",
+            CardValue::Queen => "Q",
+            CardValue::King => "K",
+            CardValue::Ace => "A",
+        }
+    }
+    fn value(self) -> u8 {
+        match self {
+            CardValue::Two => 2,
+            CardValue::Three => 3,
+            CardValue::Four => 4,
+            CardValue::Five => 5,
+            CardValue::Six => 6,
+            CardValue::Seven => 7,
+            CardValue::Eight => 8,
+            CardValue::Nine => 9,
+            CardValue::Ten => 10,
+            CardValue::Jack => 11,
+            CardValue::Queen => 12,
+            CardValue::King => 13,
+            CardValue::Ace => 14,
+        }
+    }
+}
+impl fmt::Display for CardValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", CardValue::symbol(*self))
+    }
+}
+
 #[derive(Clone, Default)]
 struct Card {
     name: String,
@@ -50,7 +93,7 @@ impl Deck {
         // Build normal 52 card deck.
         let mut deck: Vec<Card> = Vec::new();
         let names = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
-        let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
+        let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
         for suit in suits {
             for (index, name) in names.iter().enumerate() {
                 deck.push( Card {
@@ -190,15 +233,18 @@ fn main() {
 
         // Set trump.
         round.trump = match deck.cards.pop() {
-            Some(mut card) => {
-                if card.suit == Suit::Wizard {
+            Some(mut top_card) => {
+                if top_card.suit == Suit::Wizard {
                     // Todo: Get input from dealer to choose trump.
                     let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
                     let rand_suit = rand::thread_rng().gen_range(0..suits.len());
-                    card.suit = suits[rand_suit];
+                    top_card.suit = suits[rand_suit];
                 }
-                card
-            },
+                if top_card.suit == Suit::Jester {
+                    top_card.suit = Suit::None;
+                }
+                top_card
+            }
             None => Card {
                 name: String::from("No Trump"),
                 value: 0,
@@ -249,18 +295,20 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed 
             continue;
         }
 
-        // If Jester was lead take suit from first non-jester.
-        if winner.card.suit == Suit::Jester && played.card.suit != Suit::Jester {
-            winner.card = played.card.clone();
-            lead_suit = played.card.suit;
-            println!("new Lead suit: {}", lead_suit);
-            continue;
+        // If Jester was led take suit from first non-jester.
+        if winner.card.suit == Suit::Jester {
+            if played.card.suit != Suit::Jester {
+                winner.card = played.card.clone();
+                lead_suit = played.card.suit;
+                println!("new Lead suit: {}", lead_suit);
+                continue;
+            }
         }
 
         // If trump has already been played, compare against it.
         if winner.card.suit == trump_suit {
             if played.card.suit == trump_suit {
-                if played.card.value > winner.card.value {
+                if  played.card.value > winner.card.value {
                     winner = played;
                     continue;
                 }
