@@ -11,7 +11,7 @@ impl Default for Suit {
 }
 impl Suit {
     // Todo: Why not just make this a &str or String? The Display::fmt for this converts the char to a &str and then to a buffer...
-    fn char(self) -> char {
+    fn symbol(self) -> char {
         match self {
             Suit::Club => '♣',
             Suit::Diamond => '♦',
@@ -25,45 +25,37 @@ impl Suit {
 }
 impl fmt::Display for Suit {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", Suit::char(*self).to_string())
+        write!(f, "{}", Suit::symbol(*self).to_string())
     }
 }
 
 #[derive(Clone, Copy)]
-enum CardValue { Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace }
+enum CardValue {
+    Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten,
+    Jack, Queen, King, Ace, Wizard, Jester, None
+}
+impl Default for CardValue {
+    fn default() -> Self { CardValue::None }
+}
 impl CardValue {
     fn symbol(self) -> &'static str {
         match self {
-            CardValue::Two => "2",
-            CardValue::Three => "3",
-            CardValue::Four => "4",
-            CardValue::Five => "5",
-            CardValue::Six => "6",
-            CardValue::Seven => "7",
-            CardValue::Eight => "8",
-            CardValue::Nine => "9",
-            CardValue::Ten => "10",
-            CardValue::Jack => "J",
-            CardValue::Queen => "Q",
-            CardValue::King => "K",
-            CardValue::Ace => "A",
+            CardValue::Two => "2", CardValue::Three => "3", CardValue::Four => "4",
+            CardValue::Five => "5", CardValue::Six => "6", CardValue::Seven => "7",
+            CardValue::Eight => "8", CardValue::Nine => "9", CardValue::Ten => "10",
+            CardValue::Jack => "J", CardValue::Queen => "Q", CardValue::King => "K",
+            CardValue::Ace => "A", CardValue::Wizard => "W", CardValue::Jester => "Je",
+            CardValue::None => ""
         }
     }
     fn value(self) -> u8 {
         match self {
-            CardValue::Two => 2,
-            CardValue::Three => 3,
-            CardValue::Four => 4,
-            CardValue::Five => 5,
-            CardValue::Six => 6,
-            CardValue::Seven => 7,
-            CardValue::Eight => 8,
-            CardValue::Nine => 9,
-            CardValue::Ten => 10,
-            CardValue::Jack => 11,
-            CardValue::Queen => 12,
-            CardValue::King => 13,
-            CardValue::Ace => 14,
+            CardValue::Two => 2, CardValue::Three => 3, CardValue::Four => 4,
+            CardValue::Five => 5, CardValue::Six => 6, CardValue::Seven => 7,
+            CardValue::Eight => 8, CardValue::Nine => 9, CardValue::Ten => 10,
+            CardValue::Jack => 11, CardValue::Queen => 12, CardValue::King => 13,
+            CardValue::Ace => 14, CardValue::Wizard => 15, CardValue::Jester => 0,
+            CardValue::None => 0
         }
     }
 }
@@ -75,13 +67,12 @@ impl fmt::Display for CardValue {
 
 #[derive(Clone, Default)]
 struct Card {
-    name: String,
-    value: usize,
+    value: CardValue,
     suit: Suit
 }
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:>2}{}", self.name.as_str(), self.suit.char())
+        write!(f, "{:>2}{}", self.value.symbol(), self.suit.symbol())
     }
 }
 
@@ -91,31 +82,23 @@ struct Deck {
 impl Deck {
     pub fn build() -> Vec<Card> {
         // Build normal 52 card deck.
+        let values = [ CardValue::Ace,
+            CardValue::Two, CardValue::Three, CardValue::Four, CardValue::Five,
+            CardValue::Six, CardValue::Seven, CardValue::Eight, CardValue::Nine,
+            CardValue::Ten, CardValue::Jack, CardValue::Queen, CardValue::King,
+        ];
+        let suits = [ Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
+
         let mut deck: Vec<Card> = Vec::new();
-        let names = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
-        let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
         for suit in suits {
-            for (index, name) in names.iter().enumerate() {
-                deck.push( Card {
-                    value: index + 2,
-                    name: String::from(name.clone()),
-                    suit
-                });
+            for value in values {
+                deck.push( Card { value, suit });
             }
         }
 
         // Add 4 Wizards and Jesters..
-        for _ in 0..4 {
-            deck.push(Card {
-                name: String::from("W"),
-                value: 15,
-                suit: Suit::Wizard
-            });
-            deck.push(Card {
-                name: String::from("Je"),
-                value: 0,
-                suit: Suit::Jester
-            });
+        for value in [ CardValue::Wizard, CardValue::Jester ] {
+            deck.push(Card {value, suit: Suit::None });
         }
 
         deck
@@ -237,7 +220,7 @@ fn main() {
                 if top_card.suit == Suit::Wizard {
                     // Todo: Get input from dealer to choose trump.
                     let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
-                    let rand_suit = rand::thread_rng().gen_range(0..suits.len());
+                    let rand_suit = rand::thread_rng().gen_range(0..3);
                     top_card.suit = suits[rand_suit];
                 }
                 if top_card.suit == Suit::Jester {
@@ -246,14 +229,14 @@ fn main() {
                 top_card
             }
             None => Card {
-                name: String::from("No Trump"),
-                value: 0,
+                value: CardValue::None,
                 suit: Suit::None
             }
         };
 
-        // Place random bets for now.
+        // Place bets.
         for i in 0..players.len() {
+            // Todo: Get player input for bet.
             let max_bet = players[1].hand.len() + 1;
             players[i].bet = rand::thread_rng().gen_range(0..max_bet);
         }
@@ -308,7 +291,7 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed 
         // If trump has already been played, compare against it.
         if winner.card.suit == trump_suit {
             if played.card.suit == trump_suit {
-                if  played.card.value > winner.card.value {
+                if  played.card.value.value() > winner.card.value.value() {
                     winner = played;
                     continue;
                 }
@@ -317,7 +300,7 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed 
 
         // Follow suit...
         if played.card.suit == lead_suit {
-            if played.card.value > winner.card.value {
+            if played.card.value.value() > winner.card.value.value() {
                 winner = played;
             }
         }
