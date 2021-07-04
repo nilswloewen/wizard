@@ -17,7 +17,7 @@ impl Suit {
             Suit::Diamond => '♦',
             Suit::Heart => '♥',
             Suit::Spade => '♠',
-            Suit::None => ' ',
+            Suit::None => '~',
         }
     }
 }
@@ -127,9 +127,9 @@ impl fmt::Display for State {
 #[derive(Clone)]
 struct Player {
     name: String,
-    score: u8,
+    score: usize,
     bet: usize,
-    tricks: u8,
+    tricks: usize,
     hand: Vec<Card>
 }
 impl fmt::Display for Player {
@@ -222,6 +222,7 @@ fn main() {
 
             // Play hand.
             for i in 0..players.len() {
+                // Todo: Get player input for which card to play from their hand.
                 // Pick random last card for now.
                 let card_played = players[i].hand.pop().unwrap();
                 trick.push(card_played);
@@ -229,6 +230,22 @@ fn main() {
 
             let winner = calc_winner_of_trick(round.trump.suit, &trick);
             println!("Winning card: {}, Player: {}", trick[winner], players[winner].name);
+            players[winner].tricks = players[winner].tricks + 1;
+        }
+
+        // Calc score based off of bets and tricks.
+        for i in 0..players.len() {
+            if players[i].tricks == players[i].bet {
+                players[i].score = players[i].score + 2;
+                players[i].score = players[i].bet;
+                continue;
+            }
+            println!("{}", players[i]);
+            let penalty = players[i].tricks.sub() - players[i].bet ;
+            println!("Penalty {}", penalty);
+            players[i].score = players[i].score + penalty;
+
+            println!("{}", players[i]);
         }
     }
 }
