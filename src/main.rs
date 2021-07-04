@@ -3,11 +3,13 @@ use std::fmt;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
+use std::panic::panic_any;
+use crate::State::Playing;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Suit { Club, Diamond, Heart, Spade, Wizard, Jester, None}
+enum Suit {Club, Diamond, Heart, Spade, Wizard, Jester, None}
 impl Default for Suit {
-    fn default() -> Self { Suit::Spade}
+    fn default() -> Self {Suit::Spade}
 }
 impl Suit {
     // Todo: Why not just make this a &str or String? The Display::fmt for this converts the char to a &str and then to a buffer...
@@ -19,7 +21,7 @@ impl Suit {
             Suit::Spade => '♠',
             Suit::Wizard => 'W',
             Suit::Jester => 'J',
-            Suit::None => 'N',
+            Suit::None => ' ',
         }
     }
 }
@@ -30,49 +32,49 @@ impl fmt::Display for Suit {
 }
 
 #[derive(Clone, Copy)]
-enum CardValue {
+enum Rank {
     Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten,
     Jack, Queen, King, Ace, Wizard, Jester, None
 }
-impl Default for CardValue {
-    fn default() -> Self { CardValue::None }
+impl Default for Rank {
+    fn default() -> Self { Rank::None }
 }
-impl CardValue {
+impl Rank {
     fn symbol(self) -> &'static str {
         match self {
-            CardValue::Two => "2", CardValue::Three => "3", CardValue::Four => "4",
-            CardValue::Five => "5", CardValue::Six => "6", CardValue::Seven => "7",
-            CardValue::Eight => "8", CardValue::Nine => "9", CardValue::Ten => "10",
-            CardValue::Jack => "J", CardValue::Queen => "Q", CardValue::King => "K",
-            CardValue::Ace => "A", CardValue::Wizard => "W", CardValue::Jester => "Je",
-            CardValue::None => ""
+            Rank::Two => "2", Rank::Three => "3", Rank::Four => "4",
+            Rank::Five => "5", Rank::Six => "6", Rank::Seven => "7",
+            Rank::Eight => "8", Rank::Nine => "9", Rank::Ten => "10",
+            Rank::Jack => "J", Rank::Queen => "Q", Rank::King => "K",
+            Rank::Ace => "A", Rank::Wizard => "W", Rank::Jester => "Je",
+            Rank::None => ""
         }
     }
-    fn value(self) -> u8 {
+    fn rank (self) -> u8 {
         match self {
-            CardValue::Two => 2, CardValue::Three => 3, CardValue::Four => 4,
-            CardValue::Five => 5, CardValue::Six => 6, CardValue::Seven => 7,
-            CardValue::Eight => 8, CardValue::Nine => 9, CardValue::Ten => 10,
-            CardValue::Jack => 11, CardValue::Queen => 12, CardValue::King => 13,
-            CardValue::Ace => 14, CardValue::Wizard => 15, CardValue::Jester => 0,
-            CardValue::None => 0
+            Rank::Two => 2, Rank::Three => 3, Rank::Four => 4,
+            Rank::Five => 5, Rank::Six => 6, Rank::Seven => 7,
+            Rank::Eight => 8, Rank::Nine => 9, Rank::Ten => 10,
+            Rank::Jack => 11, Rank::Queen => 12, Rank::King => 13,
+            Rank::Ace => 14, Rank::Wizard => 15, Rank::Jester => 0,
+            Rank::None => 0
         }
     }
 }
-impl fmt::Display for CardValue {
+impl fmt::Display for Rank {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", CardValue::symbol(*self))
+        write!(f, "{:>2}", Rank::symbol(*self))
     }
 }
 
 #[derive(Clone, Default)]
 struct Card {
-    value: CardValue,
+    face: Rank,
     suit: Suit
 }
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:>2}{}", self.value.symbol(), self.suit.symbol())
+        write!(f, "{:>2}{}", self.face.symbol(), self.suit.symbol())
     }
 }
 
@@ -82,23 +84,23 @@ struct Deck {
 impl Deck {
     pub fn build() -> Vec<Card> {
         // Build normal 52 card deck.
-        let values = [ CardValue::Ace,
-            CardValue::Two, CardValue::Three, CardValue::Four, CardValue::Five,
-            CardValue::Six, CardValue::Seven, CardValue::Eight, CardValue::Nine,
-            CardValue::Ten, CardValue::Jack, CardValue::Queen, CardValue::King,
+        let faces = [ Rank::Ace,
+            Rank::Two, Rank::Three, Rank::Four, Rank::Five,
+            Rank::Six, Rank::Seven, Rank::Eight, Rank::Nine,
+            Rank::Ten, Rank::Jack, Rank::Queen, Rank::King,
         ];
         let suits = [ Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
 
         let mut deck: Vec<Card> = Vec::new();
         for suit in suits {
-            for value in values {
-                deck.push( Card { value, suit });
+            for face in faces {
+                deck.push( Card { face, suit });
             }
         }
 
         // Add 4 Wizards and Jesters..
-        for value in [ CardValue::Wizard, CardValue::Jester ] {
-            deck.push(Card {value, suit: Suit::None });
+        for face in [ Rank::Wizard, Rank::Jester ] {
+            deck.push(Card { face, suit: Suit::None });
         }
 
         deck
@@ -135,15 +137,15 @@ struct Player {
     tricks: u8,
     hand: Vec<Card>
 }
-impl Player {
-    pub fn print(&self) {
+impl fmt::Display for Player {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut hand = String::from("| ");
         for card in self.hand.as_slice() {
             let padded_name = format!("{}", card);
             hand.push_str(padded_name.as_str());
             hand.push_str(" | ")
         }
-        println!("{:8}: Score: {:>2}, Bet: {:>2}, Tricks: {:>2}, Hand: {}", self.name, self.score, self.bet, self.tricks, hand)
+        write!(f, "{:8}: Score: {:>2}, Bet: {:>2}, Tricks: {:>2}, Hand: {}", self.name, self.score, self.bet, self.tricks, hand)
     }
 }
 
@@ -157,9 +159,6 @@ struct Round {
     trump: Card,
 }
 impl Round {
-    pub fn print(&self) {
-        println!("\nRound #{}: State: {}, Dealer: {}, Leader: {}, Trump: {}", self.round_num, self.state, self.dealer, self.leader, self.trump)
-    }
     fn default() -> Self {
         Round {
             state: State::Betting,
@@ -170,15 +169,21 @@ impl Round {
         }
     }
 }
+impl fmt::Display for Round {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "\nRound #{}: State: {}, Dealer: {}, Leader: {}, Trump: {}", self.round_num, self.state, self.dealer, self.leader, self.trump)
+    }
+}
 
 #[derive(Clone)]
 struct CardPlayed {
     card: Card,
-    player: usize
+    player_num: usize,
+    player: Player
 }
 impl fmt::Display for CardPlayed {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}, {}", self.card, self.player)
+        write!(f, "{}, {}, {}", self.card, self.player_num, self.player)
     }
 }
 
@@ -188,7 +193,7 @@ fn main() {
     let starting_players = get_players();
     let fresh_pack_of_cards = Deck::build();
     let mut round: Round = Default::default();
-    let num_rounds = 60 / starting_players.len();
+    let num_rounds = fresh_pack_of_cards.len() / starting_players.len();
 
     for round_num in 1..(num_rounds + 1) {
         round.round_num = round_num;
@@ -219,7 +224,7 @@ fn main() {
             Some(mut top_card) => {
                 if top_card.suit == Suit::Wizard {
                     // Todo: Get input from dealer to choose trump.
-                    let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
+                    let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
                     let rand_suit = rand::thread_rng().gen_range(0..3);
                     top_card.suit = suits[rand_suit];
                 }
@@ -229,11 +234,12 @@ fn main() {
                 top_card
             }
             None => Card {
-                value: CardValue::None,
+                face: Rank::None,
                 suit: Suit::None
             }
         };
 
+        println!("{}", round);
         // Place bets.
         for i in 0..players.len() {
             // Todo: Get player input for bet.
@@ -251,7 +257,8 @@ fn main() {
                 let card_played = players[i].hand.pop().unwrap();
                 trick.push(CardPlayed {
                     card: card_played,
-                    player: i
+                    player_num: i,
+                    player: players.pop().unwrap()
                 });
             }
 
@@ -269,7 +276,7 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed 
 
     for played in trick {
         println!("Winner: {}", winner);
-        println!("Played: {} {}", played.card, played.player);
+        println!("Played: {}, {}", played.card, played.player_num);
 
         if played.card.suit == Suit::Wizard {
             return played;
@@ -291,7 +298,7 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed 
         // If trump has already been played, compare against it.
         if winner.card.suit == trump_suit {
             if played.card.suit == trump_suit {
-                if  played.card.value.value() > winner.card.value.value() {
+                if  played.card.face.rank() > winner.card.face.rank() {
                     winner = played;
                     continue;
                 }
@@ -300,7 +307,7 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed 
 
         // Follow suit...
         if played.card.suit == lead_suit {
-            if played.card.value.value() > winner.card.value.value() {
+            if played.card.face.rank() > winner.card.face.rank() {
                 winner = played;
             }
         }
@@ -334,4 +341,11 @@ fn print_wizard_ascii_art() {
     println!("           _                  _\n          (_)                | |\n __      ___ ______ _ _ __ __| |\n \\ \\ /\\ / / |_  / _` | \'__/ _` |\n  \\ V  V /| |/ / (_| | | | (_| |\n   \\_/\\_/ |_/___\\__,_|_|  \\__,_|\n");
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn exploration() {
+        assert_eq!(2 + 2, 4);
+    }
+}
 
