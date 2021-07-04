@@ -3,13 +3,11 @@ use std::fmt;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
-use std::panic::panic_any;
-use crate::State::Playing;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Suit {Club, Diamond, Heart, Spade, Wizard, Jester, None}
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Suit { Club, Diamond, Heart, Spade, None}
 impl Default for Suit {
-    fn default() -> Self {Suit::Spade}
+    fn default() -> Self {Suit::Spade }
 }
 impl Suit {
     // Todo: Why not just make this a &str or String? The Display::fmt for this converts the char to a &str and then to a buffer...
@@ -19,8 +17,6 @@ impl Suit {
             Suit::Diamond => '♦',
             Suit::Heart => '♥',
             Suit::Spade => '♠',
-            Suit::Wizard => 'W',
-            Suit::Jester => 'J',
             Suit::None => ' ',
         }
     }
@@ -31,7 +27,7 @@ impl fmt::Display for Suit {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Rank {
     Two, Three, Four, Five, Six, Seven, Eight, Nine, Ten,
     Jack, Queen, King, Ace, Wizard, Jester, None
@@ -50,7 +46,7 @@ impl Rank {
             Rank::None => ""
         }
     }
-    fn rank (self) -> u8 {
+    fn value(self) -> u8 {
         match self {
             Rank::Two => 2, Rank::Three => 3, Rank::Four => 4,
             Rank::Five => 5, Rank::Six => 6, Rank::Seven => 7,
@@ -67,14 +63,14 @@ impl fmt::Display for Rank {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
 struct Card {
-    face: Rank,
+    rank: Rank,
     suit: Suit
 }
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:>2}{}", self.face.symbol(), self.suit.symbol())
+        write!(f, "{:>2}{}", self.rank.symbol(), self.suit.symbol())
     }
 }
 
@@ -84,23 +80,22 @@ struct Deck {
 impl Deck {
     pub fn build() -> Vec<Card> {
         // Build normal 52 card deck.
-        let faces = [ Rank::Ace,
-            Rank::Two, Rank::Three, Rank::Four, Rank::Five,
-            Rank::Six, Rank::Seven, Rank::Eight, Rank::Nine,
-            Rank::Ten, Rank::Jack, Rank::Queen, Rank::King,
+        let ranks = [ Rank::Two, Rank::Three, Rank::Four, Rank::Five, Rank::Six,
+            Rank::Seven, Rank::Eight, Rank::Nine, Rank::Ten,
+            Rank::Jack, Rank::Queen, Rank::King, Rank::Ace,
         ];
-        let suits = [ Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade ];
+        let suits = [ Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
 
         let mut deck: Vec<Card> = Vec::new();
         for suit in suits {
-            for face in faces {
-                deck.push( Card { face, suit });
+            for rank in ranks {
+                deck.push( Card { rank, suit });
             }
         }
 
         // Add 4 Wizards and Jesters..
-        for face in [ Rank::Wizard, Rank::Jester ] {
-            deck.push(Card { face, suit: Suit::None });
+        for rank in [ Rank::Wizard, Rank::Jester ] {
+            deck.push(Card { rank, suit: Suit::None });
         }
 
         deck
@@ -158,32 +153,9 @@ struct Round {
     leader: String,
     trump: Card,
 }
-impl Round {
-    fn default() -> Self {
-        Round {
-            state: State::Betting,
-            round_num: 0,
-            dealer: String::new(),
-            leader: String::new(),
-            trump:  Card::default()
-        }
-    }
-}
 impl fmt::Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "\nRound #{}: State: {}, Dealer: {}, Leader: {}, Trump: {}", self.round_num, self.state, self.dealer, self.leader, self.trump)
-    }
-}
-
-#[derive(Clone)]
-struct CardPlayed {
-    card: Card,
-    player_num: usize,
-    player: Player
-}
-impl fmt::Display for CardPlayed {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}, {}, {}", self.card, self.player_num, self.player)
     }
 }
 
@@ -222,26 +194,22 @@ fn main() {
         // Set trump.
         round.trump = match deck.cards.pop() {
             Some(mut top_card) => {
-                if top_card.suit == Suit::Wizard {
+                if top_card.rank == Rank::Wizard {
                     // Todo: Get input from dealer to choose trump.
                     let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
                     let rand_suit = rand::thread_rng().gen_range(0..3);
                     top_card.suit = suits[rand_suit];
                 }
-                if top_card.suit == Suit::Jester {
-                    top_card.suit = Suit::None;
-                }
                 top_card
             }
-            None => Card {
-                face: Rank::None,
-                suit: Suit::None
-            }
+            None => Card { rank: Rank::None, suit: Suit::None }
         };
 
         println!("{}", round);
+
         // Place bets.
         for i in 0..players.len() {
+            round.state = State::Betting;
             // Todo: Get player input for bet.
             let max_bet = players[1].hand.len() + 1;
             players[i].bet = rand::thread_rng().gen_range(0..max_bet);
@@ -249,70 +217,69 @@ fn main() {
 
         // Play Tricks.
         for _ in 1..round_num {
-            let mut trick: Vec<CardPlayed> = Vec::new();
+            round.state = State::Playing;
+            let mut trick: Vec<Card> = Vec::new();
 
             // Play hand.
             for i in 0..players.len() {
                 // Pick random last card for now.
                 let card_played = players[i].hand.pop().unwrap();
-                trick.push(CardPlayed {
-                    card: card_played,
-                    player_num: i,
-                    player: players.pop().unwrap()
-                });
+                trick.push(card_played);
             }
 
-            let winner: CardPlayed = calc_winner_of_trick(round.trump.suit, trick);
-            println!("Winner: {}", winner);
+            let winner = calc_winner_of_trick(round.trump.suit, &trick);
+            println!("Winning card: {}, Player: {}", trick[winner], players[winner].name);
         }
     }
 }
 
-fn calc_winner_of_trick(trump_suit: Suit, trick: Vec<CardPlayed>) -> CardPlayed {
-    let mut winner: CardPlayed = trick[0].clone();
+fn calc_winner_of_trick(trump_suit: Suit, trick: &Vec<Card>) -> usize {
+    let mut winner: usize = 0;
+    let mut lead_suit: Suit = trick[winner].suit;
 
-    let mut lead_suit: Suit = winner.card.suit;
     println!("\nTrump: {}, Lead suit: {}", trump_suit, lead_suit);
 
-    for played in trick {
-        println!("Winner: {}", winner);
-        println!("Played: {}, {}", played.card, played.player_num);
+    for i in 0..trick.len() {
+        println!("Played: {}, index: {}", trick[i], i);
 
-        if played.card.suit == Suit::Wizard {
-            return played;
+        if trick[i].rank == Rank::Wizard {
+            return i;
         }
-        if played.card.suit == Suit::Jester {
+        if trick[i].rank == Rank::Jester {
             continue;
         }
 
-        // If Jester was led take suit from first non-jester.
-        if winner.card.suit == Suit::Jester {
-            if played.card.suit != Suit::Jester {
-                winner.card = played.card.clone();
-                lead_suit = played.card.suit;
+        // If Jester was led take suit from first non-Jester.
+        if trick[winner].rank == Rank::Jester {
+            if trick[i].rank != Rank::Jester {
+                winner = i;
+                lead_suit = trick[i].suit;
                 println!("new Lead suit: {}", lead_suit);
                 continue;
             }
         }
 
-        // If trump has already been played, compare against it.
-        if winner.card.suit == trump_suit {
-            if played.card.suit == trump_suit {
-                if  played.card.face.rank() > winner.card.face.rank() {
-                    winner = played;
+        if trick[i].suit == trump_suit {
+            if trick[winner].suit == trump_suit {
+                if trick[i].rank.value() > trick[winner].rank.value() {
+                    winner = i;
                     continue;
                 }
             }
+
+            winner = i;
+            continue;
         }
 
         // Follow suit...
-        if played.card.suit == lead_suit {
-            if played.card.face.rank() > winner.card.face.rank() {
-                winner = played;
+        if trick[i].suit == lead_suit {
+            if trick[i].rank.value() > trick[winner].rank.value() {
+                winner = i;
             }
         }
     }
 
+    println!("Final : {}, index: {}", trick[winner], winner);
     winner
 }
 
@@ -343,9 +310,62 @@ fn print_wizard_ascii_art() {
 
 #[cfg(test)]
 mod tests {
+    use crate::{Card, calc_winner_of_trick};
+    use crate::Rank;
+    use crate::Suit;
+
     #[test]
-    fn exploration() {
-        assert_eq!(2 + 2, 4);
+    fn test_calc_trick() {
+        let trump = Suit::Spade;
+        let mut trick: Vec<Card> = Vec::new();
+
+        // Test all non-trump, no special.
+        trick.push(Card { rank: Rank::Queen, suit: Suit::Heart });
+        trick.push(Card { rank: Rank::King, suit: Suit::Heart });
+        trick.push(Card { rank: Rank::Two, suit: Suit::Heart });
+        assert_eq!(1, calc_winner_of_trick(trump, &trick));
+
+        // Ace of lead should now win.
+        trick.push(Card { rank: Rank::Ace, suit: Suit::Heart });
+        assert_eq!(3, calc_winner_of_trick(trump, &trick));
+
+        // Low Trump should now win.
+        trick.push(Card { rank: Rank::Two, suit: Suit::Spade });
+        assert_eq!(4, calc_winner_of_trick(trump, &trick));
+
+        // Higher Trump should now win.
+        trick.push(Card { rank: Rank::Ace, suit: Suit::Spade });
+        assert_eq!(5, calc_winner_of_trick(trump, &trick));
+
+        // Wizard killz.
+        trick.push(Card { rank: Rank::Wizard, suit: Suit::None});
+        assert_eq!(6, calc_winner_of_trick(trump, &trick));
+
+        // First Wizard always wins.
+        let mut trick: Vec<Card> = Vec::new();
+        trick.push(Card { rank: Rank::Wizard, suit: Suit::None});
+        trick.push(Card { rank: Rank::Wizard, suit: Suit::None});
+        trick.push(Card { rank: Rank::Wizard, suit: Suit::None});
+        assert_eq!(0, calc_winner_of_trick(trump, &trick));
+
+        // First Jester wins if all Jesters.
+        let mut trick: Vec<Card> = Vec::new();
+        trick.push(Card { rank: Rank::Jester, suit: Suit::None});
+        trick.push(Card { rank: Rank::Jester, suit: Suit::None});
+        trick.push(Card { rank: Rank::Jester, suit: Suit::None});
+        assert_eq!(0, calc_winner_of_trick(trump, &trick));
+
+        // First non-Jester sets lead suit.
+        trick.push(Card { rank: Rank::Two, suit: Suit::Diamond});
+        assert_eq!(3, calc_winner_of_trick(trump, &trick));
+
+        // New lead suit is now followed.
+        trick.push(Card { rank: Rank::Three, suit: Suit::Diamond});
+        assert_eq!(4, calc_winner_of_trick(trump, &trick));
+
+        // Trump still wins.
+        trick.push(Card { rank: Rank::Two, suit: Suit::Spade});
+        assert_eq!(5, calc_winner_of_trick(trump, &trick));
     }
 }
 
