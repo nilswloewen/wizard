@@ -12,13 +12,7 @@ enum Suit {
     Spade,
     None,
 }
-impl Default for Suit {
-    fn default() -> Self {
-        Suit::Spade
-    }
-}
 impl Suit {
-    // Todo: Why not just make this a &str or String? The Display::fmt for this converts the char to a &str and then to a buffer...
     fn symbol(self) -> char {
         match self {
             Suit::Club => '♣',
@@ -107,7 +101,7 @@ impl fmt::Display for Rank {
     }
 }
 
-#[derive(Clone, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct Card {
     rank: Rank,
     suit: Suit,
@@ -118,11 +112,11 @@ impl fmt::Display for Card {
     }
 }
 
-struct Deck {
-    cards: Vec<Card>,
-}
+struct Deck;
 impl Deck {
     pub fn build() -> Vec<Card> {
+        let mut deck: Vec<Card> = Vec::new();
+
         // Build normal 52 card deck.
         let ranks = [
             Rank::Two,
@@ -139,16 +133,13 @@ impl Deck {
             Rank::King,
             Rank::Ace,
         ];
-        let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
-
-        let mut deck: Vec<Card> = Vec::new();
-        for suit in suits {
+        for suit in [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade] {
             for rank in ranks {
                 deck.push(Card { rank, suit });
             }
         }
 
-        // Add 4 Wizards and Jesters..
+        // Add 4 Wizards and Jesters.
         for _ in 0..4 {
             for rank in [Rank::Wizard, Rank::Jester] {
                 deck.push(Card {
@@ -161,73 +152,51 @@ impl Deck {
         deck
     }
 
-    pub fn shuffle(mut cards: Vec<Card>) -> Vec<Card> {
-        let deck_slice = cards.as_mut_slice();
+    pub fn shuffle(mut deck: Vec<Card>) -> Vec<Card> {
+        let deck_slice = deck.as_mut_slice();
         let mut rng = thread_rng();
         deck_slice.shuffle(&mut rng);
 
-        cards = deck_slice.to_vec();
-        cards
-    }
-}
-
-enum State {
-    Betting,
-    Playing,
-}
-impl Default for State {
-    fn default() -> Self {
-        State::Betting
-    }
-}
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            State::Betting => write!(f, "Betting"),
-            State::Playing => write!(f, "Playing"),
-        }
+        deck_slice.to_vec()
     }
 }
 
 #[derive(Clone)]
 struct Player {
     name: String,
-    score: usize,
-    bet: usize,
-    tricks: usize,
+    score: i8,
+    bet: i8,
+    tricks: i8,
     hand: Vec<Card>,
 }
 impl fmt::Display for Player {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut hand = String::from("| ");
+        let mut hand = String::new();
         for card in self.hand.as_slice() {
-            let padded_name = format!("{}", card);
+            let padded_name = format!("|{}|", card);
             hand.push_str(padded_name.as_str());
-            hand.push_str(" | ")
+            hand.push_str(" ")
         }
         write!(
             f,
-            "{:8}: Score: {:>2}, Bet: {:>2}, Tricks: {:>2}, Hand: {}",
+            "{:>8}: Score: {:>3}, Bet: {:>2}, Tricks: {:>2}, Hand: {}",
             self.name, self.score, self.bet, self.tricks, hand
         )
     }
 }
 
-#[derive(Default)]
 struct Round {
-    state: State,
     round_num: usize,
-    // Todo: Make reference to Player object.
-    dealer: String,
-    leader: String,
+    dealer: Player,
+    leader: Player,
     trump: Card,
 }
 impl fmt::Display for Round {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "\nRound #{}: State: {}, Dealer: {}, Leader: {}, Trump: {}",
-            self.round_num, self.state, self.dealer, self.leader, self.trump
+            "\nRound #{}: Dealer: {}, Leader: {}, Trump: {}",
+            self.round_num, self.dealer.name, self.leader.name, self.trump
         )
     }
 }
@@ -235,67 +204,62 @@ impl fmt::Display for Round {
 fn main() {
     print_wizard_ascii_art();
 
-    let starting_players = get_players();
+    let mut players = get_players();
     let fresh_pack_of_cards = Deck::build();
-    let mut round: Round = Default::default();
-    let num_rounds = fresh_pack_of_cards.len() / starting_players.len();
+    let mut round = Round {
+        round_num: 0,
+        dealer: players[0].clone(),
+        leader: players[1].clone(),
+        trump: Card {
+            rank: Rank::None,
+            suit: Suit::None,
+        },
+    };
+    let num_rounds = (fresh_pack_of_cards.len() / players.len()) - 5;
 
     for round_num in 1..(num_rounds + 1) {
         round.round_num = round_num;
 
         // Get players and rotate dealer.
-        let mut players = starting_players.clone();
         let player_rotation = round_num % &players.len();
         players.rotate_left(player_rotation);
-        round.dealer = String::from(&players[0].name);
+        round.dealer = players[0].clone();
 
         // Rotate again so leader gets first deal and starts betting round.
         players.rotate_left(1);
-        round.leader = String::from(&players[0].name);
+        round.leader = players[0].clone();
 
         // Shuffle new deck.
-        let mut deck = Deck {
-            cards: fresh_pack_of_cards.clone(),
-        };
-        deck.cards = Deck::shuffle(deck.cards);
+        let mut deck = Deck::shuffle(fresh_pack_of_cards.clone());
 
         // Deal
         for i in 0..players.len() {
+            players[i].hand.clear();
             for _ in 0..round_num {
-                players[i].hand.push(deck.cards.pop().unwrap());
+                players[i].hand.push(deck.pop().unwrap());
             }
         }
 
-        // Set trump.
-        round.trump = match deck.cards.pop() {
-            Some(mut top_card) => {
-                if top_card.rank == Rank::Wizard {
-                    // Todo: Get input from dealer to choose trump.
-                    let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
-                    let rand_suit = rand::thread_rng().gen_range(0..3);
-                    top_card.suit = suits[rand_suit];
-                }
-                top_card
-            }
-            None => Card {
-                rank: Rank::None,
-                suit: Suit::None,
-            },
-        };
+        round.trump = set_trump(deck.pop());
 
         println!("{}", round);
 
         // Place bets.
         for i in 0..players.len() {
-            round.state = State::Betting;
             // Todo: Get player input for bet.
             let max_bet = players[1].hand.len() + 1;
-            players[i].bet = rand::thread_rng().gen_range(0..max_bet);
+            players[i].bet = rand::thread_rng().gen_range(0..max_bet) as i8;
+        }
+
+        // Print current standing.
+        for i in 0..players.len() {
+            players[i].tricks = 0;
+            println!("{}", players[i]);
         }
 
         // Play Tricks.
-        for _ in 1..round_num {
-            round.state = State::Playing;
+        for i in 1..(round_num + 1) {
+            println!("\nTrick #{}", i);
             let mut trick: Vec<Card> = Vec::new();
 
             // Play hand.
@@ -303,43 +267,48 @@ fn main() {
                 // Todo: Get player input for which card to play from their hand.
                 // Pick random last card for now.
                 let card_played = players[i].hand.pop().unwrap();
-                trick.push(card_played);
+                trick.push(card_played.clone());
+                println!("{:>8}: {}", players[i].name, card_played);
             }
 
             let winner = calc_winner_of_trick(round.trump.suit, &trick);
             println!(
-                "Winning card: {}, Player: {}",
+                "  Winner: {} - {}",
                 trick[winner], players[winner].name
             );
-            players[winner].tricks = players[winner].tricks + 1;
+            players[winner].tricks += 1;
+
+            // Winner of trick should lead next trick.
+            players.rotate_left(winner);
         }
 
-        // Calc score based off of bets and tricks.
+        players = calc_score(players);
+
+        // Print standing after tricks.
         for i in 0..players.len() {
-            if players[i].tricks == players[i].bet {
-                players[i].score = players[i].score + 2;
-                players[i].score = players[i].bet;
-                continue;
-            }
-            // println!("{}", players[i]);
-            // let penalty = players[i].tricks.sub() - players[i].bet;
-            // println!("Penalty {}", penalty);
-            // players[i].score = players[i].score + penalty;
-            //
-            // println!("{}", players[i]);
+            println!("{}", players[i]);
         }
     }
+}
+
+fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
+    for i in 0..players.len() {
+        if players[i].tricks == players[i].bet {
+            players[i].score += 2 + players[i].bet;
+            continue;
+        }
+
+        let penalty: i8 = (players[i].bet - players[i].tricks).abs();
+        players[i].score -= penalty;
+    }
+    players
 }
 
 fn calc_winner_of_trick(trump_suit: Suit, trick: &Vec<Card>) -> usize {
     let mut winner: usize = 0;
     let mut lead_suit: Suit = trick[winner].suit;
 
-    println!("\nTrump: {}, Lead suit: {}", trump_suit, lead_suit);
-
     for i in 0..trick.len() {
-        println!("Played: {}, index: {}", trick[i], i);
-
         if trick[i].rank == Rank::Wizard {
             return i;
         }
@@ -352,7 +321,6 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: &Vec<Card>) -> usize {
             if trick[i].rank != Rank::Jester {
                 winner = i;
                 lead_suit = trick[i].suit;
-                println!("new Lead suit: {}", lead_suit);
                 continue;
             }
         }
@@ -377,7 +345,6 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: &Vec<Card>) -> usize {
         }
     }
 
-    println!("Final : {}, index: {}", trick[winner], winner);
     winner
 }
 
@@ -406,9 +373,27 @@ fn print_wizard_ascii_art() {
     println!("           _                  _\n          (_)                | |\n __      ___ ______ _ _ __ __| |\n \\ \\ /\\ / / |_  / _` | \'__/ _` |\n  \\ V  V /| |/ / (_| | | | (_| |\n   \\_/\\_/ |_/___\\__,_|_|  \\__,_|\n");
 }
 
+fn set_trump(top_card: Option<Card>) -> Card {
+    match top_card {
+        Some(mut card) => {
+            if card.rank == Rank::Wizard {
+                // Todo: Get input from dealer to choose trump.
+                let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
+                let rand_suit = rand::thread_rng().gen_range(0..3);
+                card.suit = suits[rand_suit];
+            }
+            card
+        }
+        None => Card {
+            rank: Rank::None,
+            suit: Suit::None,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::Suit;
+    use crate::{calc_score, set_trump, Player, Suit};
     use crate::{calc_winner_of_trick, Card};
     use crate::{Deck, Rank};
 
@@ -518,5 +503,70 @@ mod tests {
             suit: Suit::Spade,
         });
         assert_eq!(5, calc_winner_of_trick(trump, &trick));
+    }
+
+    #[test]
+    fn test_calc_score() {
+        let mut players: Vec<Player> = Vec::new();
+        let mut player = Player {
+            name: String::from("Steve"),
+            score: 0,
+            bet: 0,
+            tricks: 0,
+            hand: Vec::new(),
+        };
+        players.push(player.clone());
+        player.bet = 1;
+        players.push(player.clone());
+
+        player.tricks = 2;
+        players.push(player.clone());
+
+        players = calc_score(players);
+        assert_eq!(players[0].score, 2);
+        assert_eq!(players[1].score, -1);
+        assert_eq!(players[2].score, -1);
+    }
+
+    #[test]
+    fn test_set_trump() {
+        // On last round deck will be empty, trump should be null card.
+        let mut deck: Vec<Card> = Vec::new();
+        let mut trump = set_trump(deck.pop());
+        assert_eq!(
+            trump,
+            Card {
+                rank: Rank::None,
+                suit: Suit::None
+            }
+        );
+
+        // Normal card should be returned as trump.
+        let two_of_hearts = Card {
+            rank: Rank::Two,
+            suit: Suit::Heart,
+        };
+        deck.push(two_of_hearts.clone());
+        trump = set_trump(deck.pop());
+        assert_eq!(trump, two_of_hearts);
+
+        // Nothing special happens for Jester, returned like normal card.
+        let jester = Card {
+            rank: Rank::Jester,
+            suit: Suit::None,
+        };
+        deck.push(jester.clone());
+        trump = set_trump(deck.pop());
+        assert_eq!(trump, jester);
+
+        // If Wizard is flipped the dealer should choose a suit for trump.
+        let wizard = Card {
+            rank: Rank::Wizard,
+            suit: Suit::None,
+        };
+        deck.push(wizard);
+        trump = set_trump(deck.pop());
+        assert_eq!(trump.rank, Rank::Wizard);
+        assert_ne!(trump.suit, Suit::None);
     }
 }
