@@ -187,8 +187,8 @@ enum Operator {
 struct Player {
     name: String,
     score: i8,
-    bet: i8,
-    tricks: i8,
+    bet: u8,
+    tricks: u8,
     hand: Deck,
     operator: Operator,
 }
@@ -318,9 +318,7 @@ fn get_players() -> Vec<Player> {
 
     // Get name from cli.
     println!("Enter your name:");
-    let mut name_input = String::new();
-    io::stdin().read_line(&mut name_input).unwrap();
-    let name = String::from(name_input.trim());
+    let name = get_next_line();
 
     players.push(Player {
         name,
@@ -345,24 +343,29 @@ fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
         Some(mut card) => {
             if card.rank == Rank::Wizard {
                 let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
-                if dealer.operator == Operator::Human {
-                    println!(
-                        "You have flipped a Wizard as trump, which suit do you select as trump?"
-                    );
-                    for i in 1..suits.len() + 1 {
-                        println!("  {}. {}", i, suits[i]);
+                match dealer.operator {
+                    Operator::Human => {
+                        println!(
+                            "You have flipped a Wizard for trump.
+                        Which suit do you select as trump?"
+                        );
+                        for i in 1..suits.len() + 1 {
+                            println!("  {}. {}", i, suits[i]);
+                        }
+
+                        let mut selection = get_next_number();
+                        while selection > suits.len() as u8 {
+                            println!("Hey! Gotta pick what's offered here!");
+                            selection = get_next_number();
+                        }
+
+                        card.suit = suits[selection as usize - 1];
                     }
-
-                    let mut input = String::new();
-                    io::stdin().read_line(&mut input).unwrap();
-                    let selection: usize = input.trim().parse().unwrap();
-                    card.suit = suits[selection - 1];
-                }
-
-                // Todo: Get input from dealer to choose trump.
-                let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
-                let rand_suit = rand::thread_rng().gen_range(0..3);
-                card.suit = suits[rand_suit];
+                    Operator::Computer => {
+                        let rand_suit = rand::thread_rng().gen_range(0..3);
+                        card.suit = suits[rand_suit];
+                    }
+                };
             }
             card
         }
@@ -375,6 +378,8 @@ fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
 
 fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
     for i in 0..players.len() {
+        let max_bet = players[1].hand.cards.len() as u8;
+
         if players[i].operator == Operator::Human {
             let mut hand = String::new();
             for j in 0..players[i].hand.cards.len() {
@@ -383,19 +388,49 @@ fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
             println!("\nYour hand: {}", hand);
             println!("What is your bet?");
 
-            let mut bet_input = String::new();
-            io::stdin().read_line(&mut bet_input).unwrap();
-            players[i].bet = bet_input.trim().parse().unwrap();
+            let mut bet = get_next_number();
+            while bet > max_bet {
+                println!(
+                    "Yer a cocky one eh? Bet must be in the range of 0 to {}",
+                    max_bet
+                );
+                bet = get_next_number();
+            }
+
+            players[i].bet = bet;
             continue;
         }
 
         // Computer players place random bets for now.
-        let max_bet = players[1].hand.cards.len() + 1;
-        players[i].bet = rand::thread_rng().gen_range(0..max_bet) as i8;
+        players[i].bet = rand::thread_rng().gen_range(0..max_bet + 1) as u8;
         println!("{:>8} bet {}", players[i].name, players[i].bet);
     }
 
     players
+}
+
+fn get_next_line() -> String {
+    let mut input = String::new();
+    while input.is_empty() {
+        io::stdin().read_line(&mut input).unwrap();
+        input = input.trim().parse::<String>().unwrap();
+    }
+    input
+}
+
+fn get_next_number() -> u8 {
+    // ** Is there a better way to do this? I just want to keep trying until valid value is found.
+    let mut num = u8::MAX;
+    while num == u8::MAX {
+        num = match get_next_line().parse::<u8>() {
+            Ok(num) => num,
+            Err(_) => {
+                println!(" * Input must be a number * ");
+                u8::MAX
+            }
+        }
+    }
+    num
 }
 
 fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
@@ -420,12 +455,20 @@ fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
                     }
 
                     println!("Which card will you play?");
-                    let mut input = String::new();
-                    io::stdin().read_line(&mut input).unwrap();
-                    let mut play: usize = input.trim().parse().unwrap();
-                    play -= 1;
+                    let mut selection = get_next_number() as usize;
+                    while selection > players[i].hand.cards.len() {
+                        println!("Hey! Gotta pick what's offered here!");
+                        selection = get_next_number() as usize;
+                    }
 
-                    trick.push(players[i].hand.cards.drain(play..play + 1).last().unwrap());
+                    trick.push(
+                        players[i]
+                            .hand
+                            .cards
+                            .drain((selection - 1)..selection)
+                            .last()
+                            .unwrap(),
+                    );
                     continue;
                 }
                 Operator::Computer => {
@@ -500,12 +543,12 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: &Vec<Card>) -> usize {
 fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
     for i in 0..players.len() {
         if players[i].tricks == players[i].bet {
-            players[i].score += 2 + players[i].bet;
+            players[i].score += (2 + players[i].bet) as i8;
             continue;
         }
 
-        let penalty: i8 = (players[i].bet - players[i].tricks).abs();
-        players[i].score -= penalty;
+        let penalty: i8 = players[i].bet as i8 - players[i].tricks as i8;
+        players[i].score -= penalty.abs();
     }
     players
 }
