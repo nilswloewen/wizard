@@ -175,8 +175,8 @@ impl fmt::Display for Deck {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut card_names = String::new();
         for card in self.cards.as_slice() {
-            card_names.push(card.suit.symbol());
             card_names.push_str(card.rank.symbol());
+            card_names.push(card.suit.symbol());
             card_names.push_str(" ")
         }
 
@@ -271,6 +271,7 @@ impl Util {
         }
         num
     }
+
     fn press_enter_to_(verb: &str) {
         println!("\nPress Enter to {}...", verb);
         let mut buffer = String::new();
