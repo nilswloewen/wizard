@@ -117,7 +117,7 @@ impl fmt::Display for Card {
 }
 
 /*
- * I wish I could create a more concise struct here, deck.pop() would be preferable to deck.cards.pop().
+ * I wish I could create a more concise struct here, deck.pop() would be preferable to deck.cards.pop(). I tried using a tuple struct but then I was accessing the vec with deck.0.pop(), which is worse than deck.cards.pop()..
  */
 #[derive(Clone)]
 struct Deck {
@@ -241,6 +241,11 @@ impl Player {
         println!();
     }
 }
+impl From<&mut Player> for Player {
+    fn from(player: &mut Player) -> Self {
+        player.clone()
+    }
+}
 
 struct Util;
 impl Util {
@@ -258,17 +263,21 @@ impl Util {
     }
 
     fn cli_next_num() -> u8 {
-        // ** Is there a better way to do this? I just want to keep trying until valid value is found. Using u8::MAX technically removes the possibility of user inputting 255, which would not happen in this game, but I think this code could be cleaner.
-        let mut num = u8::MAX;
-        while num == u8::MAX {
-            num = match Util::cli_next_string().parse::<u8>() {
-                Ok(num) => num,
+        let mut num = 0;
+        let mut valid = false;
+
+        while !valid {
+            match Util::cli_next_string().parse::<u8>() {
+                Ok(input) => {
+                    valid = true;
+                    num = input;
+                }
                 Err(_) => {
                     println!(" * Input must be a number * ");
-                    u8::MAX
                 }
             }
         }
+
         num
     }
 
@@ -326,7 +335,6 @@ fn main() {
         println!("--------------------");
 
         // Print human's hand so it they can see it in case
-        // Todo: Perhaps print this before wizard is trump and human gotta decide.
         for player in players.clone() {
             if player.operator == Operator::Human {
                 println!("\nYour hand: {}", player.hand);
@@ -370,7 +378,7 @@ fn get_players() -> Vec<Player> {
         ..Player::new()
     }];
 
-    let computer_names = ["Alice", "Bob", "Chuck", "Daniel", "Eli"];
+    let computer_names = ["Merlin", "Oz", "Sarumon", "Gandalf", "Kvothe"];
     for name in computer_names {
         players.push(Player {
             name: String::from(name),
@@ -605,16 +613,20 @@ fn calc_winner_of_trick(trump_suit: Suit, trick: &Vec<Card>) -> usize {
 }
 
 fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
-    for i in 0..players.len() {
-        if players[i].tricks == players[i].bet {
-            players[i].score += (2 + players[i].bet) as i8;
-            continue;
-        }
-
-        let penalty: i8 = players[i].bet as i8 - players[i].tricks as i8;
-        players[i].score -= penalty.abs();
-    }
     players
+        .iter_mut()
+        .map(|player: &mut Player| {
+            if player.tricks == player.bet {
+                player.score += (2 + player.bet) as i8;
+                return player.into();
+            }
+
+            let penalty: i8 = player.bet as i8 - player.tricks as i8;
+            player.score -= penalty.abs();
+
+            player.into()
+        })
+        .collect::<Vec<Player>>()
 }
 
 fn calc_final_score(mut players: Vec<Player>) -> Player {
