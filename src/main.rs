@@ -191,9 +191,10 @@ enum Operator {
 #[derive(Clone)]
 struct Player {
     name: String,
-    // 8-bit ints are bigger than I need,
+    // The possible score range is -210..250. i8 is perfect for this.
     score: i8,
-    // Bet and tricks can never be higher than 20, u5 would do.
+    // Bet and tricks can never be negative or higher than 20, u5 would do.
+    // Todo: Bring in external crate uX https://docs.rs/crate/ux/0.1.3t.
     bet: u8,
     tricks: u8,
     hand: Deck,
