@@ -116,9 +116,6 @@ impl fmt::Display for Card {
     }
 }
 
-/*
- * I wish I could create a more concise struct here, deck.pop() would be preferable to deck.cards.pop(). I tried using a tuple struct but then I was accessing the vec with deck.0.pop(), which is worse than deck.cards.pop()..
- */
 #[derive(Clone)]
 struct Deck {
     cards: Vec<Card>,
@@ -172,6 +169,7 @@ impl Deck {
     }
 }
 impl fmt::Display for Deck {
+    // Return space " " separated list of cards.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut card_names = String::new();
         for card in self.cards.as_slice() {
@@ -193,7 +191,9 @@ enum Operator {
 #[derive(Clone)]
 struct Player {
     name: String,
+    // 8-bit ints are bigger than I need,
     score: i8,
+    // Bet and tricks can never be higher than 20, u5 would do.
     bet: u8,
     tricks: u8,
     hand: Deck,
@@ -254,31 +254,42 @@ impl Util {
     }
 
     fn cli_next_string() -> String {
-        let mut input = String::new();
-        while input.is_empty() {
-            io::stdin().read_line(&mut input).unwrap();
-            input = input.trim().parse::<String>().unwrap();
+        let mut buffer = String::new();
+        loop {
+            io::stdin().read_line(&mut buffer).unwrap();
+            match buffer.trim().parse::<String>() {
+                Ok(input) => {
+                    if !input.is_empty() {
+                        return input;
+                    }
+                }
+                Err(_) => {}
+            }
         }
-        input
     }
 
     fn cli_next_num() -> u8 {
-        let mut num = 0;
-        let mut valid = false;
-
-        while !valid {
+        loop {
             match Util::cli_next_string().parse::<u8>() {
-                Ok(input) => {
-                    valid = true;
-                    num = input;
+                Ok(num) => {
+                    return num;
                 }
                 Err(_) => {
-                    println!(" * Input must be a number * ");
+                    println!(" * Input must be a whole number * ");
                 }
             }
         }
+    }
 
-        num
+    fn cli_next_pos_num() -> u8 {
+        loop {
+            let num = Util::cli_next_num();
+            if num == 0 {
+                println!(" * Input must be a positive number * ");
+                continue;
+            }
+            return num;
+        }
     }
 
     fn press_enter_to_(verb: &str) {
@@ -298,19 +309,20 @@ fn main() {
     let new_deck = Deck { cards: Deck::new() };
 
     let original_players = get_players();
-    Player::print_names(&original_players);
+    let mut players = original_players.clone();
+    Player::print_names(&players);
+
     Util::press_enter_to_("start first round");
 
-    let mut players = original_players.clone();
-
     // ** Short game for demo purposes. **
-    let num_rounds = 3;
     // let num_rounds = new_deck.cards.len() / players.len();
+    let num_rounds = 3;
+
     for round_num in 1..(num_rounds + 1) {
         let mut deck = Deck::shuffle(new_deck.cards.clone());
 
         // Get players and rotate dealer.
-        let player_rotation = round_num - 1 % &players.len();
+        let player_rotation = round_num - 1 % players.len();
         players.rotate_left(player_rotation);
         let dealer = players[0].clone();
 
@@ -397,7 +409,7 @@ fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
     println!(" Trump: {}", card);
 
     if card.rank == Rank::Wizard {
-        println!("\nThe top card is a Wizard!");
+        println!("\nTrump is a Wizard!");
         let suits = [Suit::Club, Suit::Diamond, Suit::Heart, Suit::Spade];
 
         match dealer.operator {
@@ -407,13 +419,16 @@ fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
                     println!("  {}. {}", i + 1, suits[i]);
                 }
 
-                let mut selection = Util::cli_next_num();
-                while selection > suits.len() as u8 {
-                    println!("Hey! Gotta pick what's offered here!");
-                    selection = Util::cli_next_num();
-                }
+                loop {
+                    let selection = Util::cli_next_pos_num() as usize - 1;
+                    if selection > suits.len() {
+                        println!("Hey! Gotta pick what's offered here!");
+                        continue;
+                    }
 
-                card.suit = suits[selection as usize - 1];
+                    card.suit = suits[selection];
+                    break;
+                }
             }
             Operator::Computer => {
                 println!("{} will select suit...", dealer.name);
@@ -521,36 +536,28 @@ fn play_trick_for_human(player: &Player, lead_suit: Suit) -> usize {
     }
     println!("Which card will you play?");
 
-    let mut selection = 0;
-    let mut valid_play = false;
-    // Todo: This could be cleaner as an anon function returning selection instead of valid_play.
-    while !valid_play {
-        selection = Util::cli_next_num() as usize - 1;
-        while selection >= size_of_hand {
+    loop {
+        let selection = Util::cli_next_pos_num() as usize - 1;
+
+        if selection >= size_of_hand {
             println!("Hey! Gotta pick what's offered!");
-            selection = Util::cli_next_num() as usize - 1;
+            continue;
         }
 
-        let card = player.hand.cards[selection].clone();
+        let card = &player.hand.cards[selection];
         if card.rank == Rank::Wizard || card.rank == Rank::Jester {
-            valid_play = true;
-            continue;
-        }
-
-        if card.suit == lead_suit {
-            valid_play = true;
-            continue;
+            return selection;
         }
 
         if can_follow_suit {
-            println!("Hey! Gotta follow suit!");
-            continue;
+            if card.suit != lead_suit {
+                println!("Hey! Gotta follow suit!");
+                continue;
+            }
         }
 
-        valid_play = true;
+        return selection;
     }
-
-    selection
 }
 
 fn play_trick_for_computer(player: &Player, lead_suit: Suit) -> usize {
