@@ -102,6 +102,14 @@ struct Card {
     rank: Rank,
     suit: Suit,
 }
+impl Card {
+    fn new() -> Card {
+        Card {
+            rank: Rank::None,
+            suit: Suit::None,
+        }
+    }
+}
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:>2}{}", self.rank.symbol(), self.suit.symbol())
@@ -164,9 +172,9 @@ impl fmt::Display for Deck {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut card_names = String::new();
         for card in self.cards.as_slice() {
-            let padded_name = format!("|{}|", card);
+            let padded_name = format!("{}", card);
             card_names.push_str(padded_name.as_str());
-            card_names.push_str(" ")
+            card_names.push_str(" | ")
         }
 
         write!(f, "{}", card_names)
@@ -240,19 +248,17 @@ fn main() {
     Player::print_names(&original_players);
     press_enter_to_("start first round");
 
-    // Rotate back so that the first arg ends up as the first dealer when rotated later on.
     let mut players = original_players.clone();
 
-    // let num_rounds = new_deck.cards.len() / players.len();
     // ** Short game for demo purposes. **
     let num_rounds = 3;
+    // let num_rounds = new_deck.cards.len() / players.len();
     for round_num in 1..(num_rounds + 1) {
         let mut deck = Deck::shuffle(new_deck.cards.clone());
 
         // Get players and rotate dealer.
         let player_rotation = round_num - 1 % &players.len();
         players.rotate_left(player_rotation);
-
         let dealer = players[0].clone();
 
         // Rotate again so leader gets first deal and starts betting round.
@@ -262,15 +268,13 @@ fn main() {
         // Deal cards.
         for i in 0..players.len() {
             players[i].hand.cards.clear();
+            // Reset tricks.
+            players[i].tricks = 0;
             for _ in 0..round_num {
                 players[i].hand.cards.push(deck.pop().unwrap());
             }
         }
 
-        deck.push(Card {
-            rank: Rank::Wizard,
-            suit: Suit::None,
-        });
         let trump = set_trump(deck.pop(), &dealer);
 
         println!(
@@ -292,10 +296,6 @@ fn main() {
         players = place_bets(players);
         press_enter_to_("play first trick");
 
-        // Reset tricks.
-        for i in 0..players.len() {
-            players[i].tricks = 0;
-        }
         players = play_tricks(players, trump);
         players = calc_score(players);
 
@@ -310,17 +310,7 @@ fn main() {
         press_enter_to_("start next round");
     }
 
-    // Calc final score.
-    let mut winner = players.drain(0..1).last().unwrap();
-    for player in players {
-        if player.score > winner.score {
-            winner = player;
-        }
-    }
-    println!(
-        "{} is the winner with {} points!",
-        winner.name, winner.score
-    );
+    calc_final_score(players);
 }
 
 fn print_wizard_ascii_art() {
@@ -380,10 +370,7 @@ fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
             }
             card
         }
-        None => Card {
-            rank: Rank::None,
-            suit: Suit::None,
-        },
+        None => Card::new()
     }
 }
 
@@ -392,11 +379,6 @@ fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
         let max_bet = players[1].hand.cards.len() as u8;
 
         if players[i].operator == Operator::Human {
-            let mut hand = String::new();
-            for j in 0..players[i].hand.cards.len() {
-                hand.push_str(format!("{} ", players[i].hand.cards[j]).as_str());
-            }
-            println!("\nYour hand: {}", hand);
             println!("What is your bet?");
 
             let mut bet = get_next_cli_num();
@@ -614,6 +596,19 @@ fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
     players
 }
 
+fn calc_final_score(mut players: Vec<Player>) {
+    let mut winner = players.pop().unwrap();
+    for player in players {
+        if player.score > winner.score {
+            winner = player;
+        }
+    }
+    println!(
+        "{} is the winner with {} points!",
+        winner.name, winner.score
+    );
+}
+
 fn press_enter_to_(verb: &str) {
     println!("\nPress Enter to {}...", verb);
     let mut buffer = String::new();
@@ -621,13 +616,12 @@ fn press_enter_to_(verb: &str) {
 }
 
 fn sleep() {
-    let ten_millis = time::Duration::from_millis(500);
-    thread::sleep(ten_millis);
+    thread::sleep(time::Duration::from_millis(500));
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{calc_score, set_trump, Operator, Player, Suit};
+    use crate::{calc_score, set_trump, Player, Suit};
     use crate::{calc_winner_of_trick, Card};
     use crate::{Deck, Rank};
 
@@ -639,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_calc_trick() {
-        let trump = Suit::Spade;
+        let mut trump = Suit::Spade;
         let mut trick: Vec<Card> = Vec::new();
 
         // Test all non-trump, no Wizard or Jester.
@@ -657,7 +651,7 @@ mod tests {
         });
         assert_eq!(1, calc_winner_of_trick(trump, &trick));
 
-        // Ace of lead should now win.
+        // Ace of lead suit should now win.
         trick.push(Card {
             rank: Rank::Ace,
             suit: Suit::Heart,
@@ -678,15 +672,8 @@ mod tests {
         });
         assert_eq!(5, calc_winner_of_trick(trump, &trick));
 
-        // Wizard killz.
-        trick.push(Card {
-            rank: Rank::Wizard,
-            suit: Suit::None,
-        });
-        assert_eq!(6, calc_winner_of_trick(trump, &trick));
-
         // First Wizard always wins.
-        let mut trick: Vec<Card> = Vec::new();
+        trick.clear();
         trick.push(Card {
             rank: Rank::Wizard,
             suit: Suit::None,
@@ -702,7 +689,7 @@ mod tests {
         assert_eq!(0, calc_winner_of_trick(trump, &trick));
 
         // First Jester wins if all Jesters.
-        let mut trick: Vec<Card> = Vec::new();
+        trick.clear();
         trick.push(Card {
             rank: Rank::Jester,
             suit: Suit::None,
@@ -739,13 +726,14 @@ mod tests {
         assert_eq!(5, calc_winner_of_trick(trump, &trick));
 
         // If there is no trump then highest lead suit wins.
-        let trump = Suit::None;
+        trump = Suit::None;
         assert_eq!(4, calc_winner_of_trick(trump, &trick));
 
+        // Make sure second Jester doesn't mess up lead suit.
         trick.clear();
         trick.push(Card {
-            rank: Rank::King,
-            suit: Suit::Spade,
+            rank: Rank::Jester,
+            suit: Suit::None,
         });
         trick.push(Card {
             rank: Rank::Five,
@@ -768,21 +756,15 @@ mod tests {
             suit: Suit::Diamond,
         });
 
-        let trump = Suit::Diamond;
+        trump = Suit::Diamond;
         assert_eq!(3, calc_winner_of_trick(trump, &trick));
     }
 
     #[test]
     fn test_calc_score() {
         let mut players: Vec<Player> = Vec::new();
-        let mut player = Player {
-            name: String::from("Steve"),
-            score: 0,
-            bet: 0,
-            tricks: 0,
-            hand: Deck { cards: Vec::new() },
-            operator: Operator::Computer,
-        };
+        let mut player = Player::new();
+
         players.push(player.clone());
         player.bet = 1;
         players.push(player.clone());
@@ -799,16 +781,11 @@ mod tests {
     #[test]
     fn test_set_trump() {
         let dealer = Player::new();
+
         // On last round deck will be empty, trump should be null card.
         let mut deck: Vec<Card> = Vec::new();
         let mut trump = set_trump(deck.pop(), &dealer);
-        assert_eq!(
-            trump,
-            Card {
-                rank: Rank::None,
-                suit: Suit::None
-            }
-        );
+        assert_eq!(trump, Card::new());
 
         // Normal card should be returned as trump.
         let two_of_hearts = Card {
