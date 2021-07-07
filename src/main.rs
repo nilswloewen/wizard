@@ -224,26 +224,27 @@ impl Player {
         println!();
         println!(" Players");
         println!(" -------");
-        for i in 0..players.len() {
-            println!(" {}", players[i].name);
-        }
+
+        players.iter().for_each(|player| {
+            println!(" {}", player.name);
+        });
     }
 
     fn print_score(players: &Vec<Player>) {
         println!();
         println!(" Name    Score   Bet   Tricks");
         println!(" ----------------------------");
-        for i in 0..players.len() {
+        players.iter().for_each(|player| {
             println!(
                 " {:8} {:>2}     {:>2}     {:>2}",
-                players[i].name, players[i].score, players[i].bet, players[i].tricks
+                player.name, player.score, player.bet, player.tricks
             );
-        }
-        println!();
+        });
     }
 }
 impl From<&mut Player> for Player {
     fn from(player: &mut Player) -> Self {
+        // Is there a better way to do this? I don't need to clone the Player, I just want to make it non-mutable.
         player.clone()
     }
 }
@@ -326,12 +327,12 @@ fn main() {
         let player_rotation = round_num - 1 % players.len();
         players.rotate_left(player_rotation);
         let dealer = players[0].clone();
+        let leader = players[1].clone();
 
-        // Rotate again so leader gets first deal and starts betting round.
+        // Rotate again so leader receives first deal and starts betting round.
         players.rotate_left(1);
-        let leader = players[0].clone();
 
-        // Deal cards and reset hand and tricks..
+        // Deal cards and reset hand and tricks.
         for i in 0..players.len() {
             players[i].hand.cards.clear();
             players[i].tricks = 0;
@@ -348,7 +349,7 @@ fn main() {
         println!("--------------------");
 
         // Print human's hand so it they can see it in case
-        for player in players.clone() {
+        for player in &players {
             if player.operator == Operator::Human {
                 println!("\nYour hand: {}", player.hand);
                 break;
@@ -364,6 +365,8 @@ fn main() {
         players = calc_score(players);
 
         // Reset player order to original so scoreboard and dealer rotation are consistent.
+        // Edge case: This may fail if two players have the same name.
+        // Is there a better way to match the rotation of current players to original players? Perhaps I just need to map the updated score onto the original players.
         while players[0].name != original_players[0].name {
             players.rotate_left(1);
         }
