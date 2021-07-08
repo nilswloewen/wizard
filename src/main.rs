@@ -191,8 +191,8 @@ enum Operator {
 #[derive(Clone)]
 struct Player {
     name: String,
-    // The possible score range is -210..250. i8 is perfect for this.
-    score: i8,
+    // The possible score range is -210..250. i16 is perfect for this.
+    score: i16,
     // Bet and tricks have a range of 0..20, u5 would do.
     // Todo: Bring in external crate uX https://docs.rs/crate/ux/0.1.3t.
     bet: u8,
@@ -632,11 +632,11 @@ fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
         .iter_mut()
         .map(|player: &mut Player| {
             if player.tricks == player.bet {
-                player.score += (2 + player.bet) as i8;
+                player.score += (2 + player.bet) as i16;
                 return player.into();
             }
 
-            let penalty: i8 = player.bet as i8 - player.tricks as i8;
+            let penalty: i16 = player.bet as i16 - player.tricks as i16;
             player.score -= penalty.abs();
 
             player.into()
