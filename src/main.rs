@@ -193,12 +193,13 @@ struct Player {
     name: String,
     // The possible score range is -210..250. i8 is perfect for this.
     score: i8,
-    // Bet and tricks can never be negative or higher than 20, u5 would do.
+    // Bet and tricks have a range of 0..20, u5 would do.
     // Todo: Bring in external crate uX https://docs.rs/crate/ux/0.1.3t.
     bet: u8,
     tricks: u8,
     hand: Deck,
     operator: Operator,
+    original_position: u8,
 }
 impl Player {
     fn new() -> Player {
@@ -209,6 +210,7 @@ impl Player {
             tricks: 0,
             hand: Deck { cards: Vec::new() },
             operator: Operator::Computer,
+            original_position: 0,
         }
     }
 
@@ -310,8 +312,7 @@ fn main() {
 
     let new_deck = Deck { cards: Deck::new() };
 
-    let original_players = get_players();
-    let mut players = original_players.clone();
+    let mut players = get_players();
     Player::print_names(&players);
 
     Util::press_enter_to_("start first round");
@@ -332,7 +333,7 @@ fn main() {
         // Rotate again so leader receives first deal and starts betting round.
         players.rotate_left(1);
 
-        // Deal cards and reset hand and tricks.
+        // Deal cards and reset stats.
         for i in 0..players.len() {
             players[i].hand.cards.clear();
             players[i].tricks = 0;
@@ -345,16 +346,14 @@ fn main() {
             "\n--- Round {:>2} --- \nDealer: {} \nLeader: {}",
             round_num, dealer.name, leader.name
         );
-        let trump = set_trump(deck.pop(), &dealer);
-        println!("--------------------");
-
-        // Print human's hand so it they can see it in case
         for player in &players {
             if player.operator == Operator::Human {
-                println!("\nYour hand: {}", player.hand);
+                println!("\nYour hand: {}\n", player.hand);
                 break;
             }
         }
+        let trump = set_trump(deck.pop(), &dealer);
+        println!("--------------------");
 
         Util::press_enter_to_("start betting");
 
@@ -365,9 +364,7 @@ fn main() {
         players = calc_score(players);
 
         // Reset player order to original so scoreboard and dealer rotation are consistent.
-        // Edge case: This may fail if two players have the same name.
-        // Is there a better way to match the rotation of current players to original players? Perhaps I just need to map the updated score onto the original players.
-        while players[0].name != original_players[0].name {
+        while players[0].original_position != 0 {
             players.rotate_left(1);
         }
 
@@ -395,9 +392,10 @@ fn get_players() -> Vec<Player> {
     }];
 
     let computer_names = ["Merlin", "Oz", "Sarumon", "Gandalf", "Kvothe"];
-    for name in computer_names {
+    for (index, name) in computer_names.iter().enumerate() {
         players.push(Player {
-            name: String::from(name),
+            name: String::from(*name),
+            original_position: (index + 1) as u8,
             ..Player::new()
         });
     }
@@ -448,33 +446,38 @@ fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
 }
 
 fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
-    for i in 0..players.len() {
-        let max_bet = players[1].hand.cards.len() as u8;
-
-        if players[i].operator == Operator::Human {
-            println!("What is your bet?");
-
-            let mut bet = Util::cli_next_num();
-            while bet > max_bet {
-                println!(
-                    "Yer a cocky one eh? Bet must be in the range of 0 to {}",
-                    max_bet
-                );
-                bet = Util::cli_next_num();
-            }
-
-            players[i].bet = bet;
-            println!("{:>8} bet {}", players[i].name, players[i].bet);
-            continue;
-        }
-
-        // Computer players place random bets for now.
-        players[i].bet = rand::thread_rng().gen_range(0..max_bet + 1) as u8;
-        println!("{:>8} bet {}", players[i].name, players[i].bet);
-        Util::sleep();
-    }
-
     players
+        .iter_mut()
+        .map(|player: &mut Player| -> Player {
+            let max_bet = player.hand.cards.len() as u8;
+
+            match player.operator {
+                Operator::Human => {
+                    println!("What is your bet?");
+
+                    loop {
+                        player.bet = Util::cli_next_num();
+                        if player.bet > max_bet {
+                            println!(
+                                "Yer a cocky one eh? Bet must be in the range of 0 to {}",
+                                max_bet
+                            );
+                            continue;
+                        }
+                        break;
+                    }
+
+                    println!("{:>8} bet {}", player.name, player.bet);
+                }
+                Operator::Computer => {
+                    player.bet = rand::thread_rng().gen_range(0..max_bet + 1) as u8;
+                    println!("{:>8} bet {}", player.name, player.bet);
+                    Util::sleep();
+                }
+            };
+            player.into()
+        })
+        .collect::<Vec<Player>>()
 }
 
 fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
@@ -530,12 +533,13 @@ fn play_trick_for_human(player: &Player, lead_suit: Suit) -> usize {
     let mut can_follow_suit = false;
     for i in 0..size_of_hand {
         println!("  {}. {}", i + 1, player.hand.cards[i]);
-        let played_suit = player.hand.cards[i].suit;
-        if played_suit == lead_suit {
-            // Not Suit::None is needed because lead_suit is initialized
-            // as Suit::None and it's possible a Wizard or Jester could match here.
-            can_follow_suit = played_suit != Suit::None;
-            break;
+        if !can_follow_suit {
+            let played_suit = player.hand.cards[i].suit;
+            if played_suit == lead_suit {
+                // Not Suit::None is needed because lead_suit is initialized
+                // as Suit::None and it's possible a Wizard or Jester could match here.
+                can_follow_suit = played_suit != Suit::None;
+            }
         }
     }
     println!("Which card will you play?");
