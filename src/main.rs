@@ -11,7 +11,7 @@ enum Suit {
     Diamond,
     Heart,
     Spade,
-    None,
+    Suitless,
 }
 impl Suit {
     fn symbol(self) -> char {
@@ -20,7 +20,7 @@ impl Suit {
             Suit::Diamond => '♦',
             Suit::Heart => '♥',
             Suit::Spade => '♠',
-            Suit::None => '~',
+            Suit::Suitless => '~',
         }
     }
 }
@@ -47,7 +47,6 @@ enum Rank {
     Ace,
     Wizard,
     Jester,
-    None,
 }
 impl Rank {
     fn symbol(self) -> &'static str {
@@ -67,7 +66,6 @@ impl Rank {
             Rank::Ace => "A",
             Rank::Wizard => "W",
             Rank::Jester => "Je",
-            Rank::None => "",
         }
     }
     fn value(self) -> u8 {
@@ -87,7 +85,6 @@ impl Rank {
             Rank::Ace => 14,
             Rank::Wizard => 15,
             Rank::Jester => 0,
-            Rank::None => 0,
         }
     }
 }
@@ -105,8 +102,8 @@ struct Card {
 impl Card {
     fn new() -> Card {
         Card {
-            rank: Rank::None,
-            suit: Suit::None,
+            rank: Rank::Wizard,
+            suit: Suit::Suitless,
         }
     }
 }
@@ -151,7 +148,7 @@ impl Deck {
             for rank in [Rank::Wizard, Rank::Jester] {
                 deck.push(Card {
                     rank,
-                    suit: Suit::None,
+                    suit: Suit::Suitless,
                 });
             }
         }
@@ -352,7 +349,13 @@ fn main() {
                 break;
             }
         }
-        let trump = set_trump(deck.pop(), &dealer);
+        let trump = match deck.pop() {
+            Some(card) => set_trump(card, &dealer),
+            None => {
+                println!("No Trump!");
+                Card::new()
+            }
+        };
         println!("--------------------");
 
         Util::press_enter_to_("start betting");
@@ -403,11 +406,7 @@ fn get_players() -> Vec<Player> {
     Player::shuffle(players)
 }
 
-fn set_trump(top_card: Option<Card>, dealer: &Player) -> Card {
-    let mut card = match top_card {
-        Some(card) => card,
-        None => Card::new(),
-    };
+fn set_trump(mut card: Card, dealer: &Player) -> Card {
     println!(" Trump: {}", card);
 
     if card.rank == Rank::Wizard {
@@ -484,29 +483,28 @@ fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
     for trick_num in 1..(players[0].hand.cards.len() + 1) {
         println!("======= Trick #{} =======", trick_num);
         let mut trick: Vec<Card> = Vec::new();
-        let mut lead_suit = Suit::None;
+        let mut lead_suit = Suit::Suitless;
 
-        for i in 0..players.len() {
-            // Get lead suit from first non-jester.
-            for t in 0..trick.len() {
-                if trick[t].suit != Suit::None {
-                    lead_suit = trick[t].suit.clone();
-                    break;
+        for player in &mut players {
+            // Get lead suit from first non-Jester in trick.
+            &trick.iter().for_each(|card| {
+                if lead_suit == Suit::Suitless && card.suit != Suit::Suitless {
+                    lead_suit = card.suit.clone();
                 }
-            }
+            });
 
-            let selected: usize = match players[i].operator {
-                Operator::Human => play_trick_for_human(&players[i], lead_suit),
-                Operator::Computer => play_trick_for_computer(&players[i], lead_suit),
+            let selected: usize = match player.operator {
+                Operator::Human => play_trick_for_human(&player, lead_suit),
+                Operator::Computer => play_trick_for_computer(&player, lead_suit),
             };
 
-            let played_card = players[i]
+            let played_card = player
                 .hand
                 .cards
                 .drain(selected..(selected + 1))
                 .last()
                 .unwrap();
-            println!("{:>8}: {}", players[i].name, played_card);
+            println!("{:>8}: {}", player.name, played_card);
             trick.push(played_card);
         }
 
@@ -538,7 +536,7 @@ fn play_trick_for_human(player: &Player, lead_suit: Suit) -> usize {
             if played_suit == lead_suit {
                 // Not Suit::None is needed because lead_suit is initialized
                 // as Suit::None and it's possible a Wizard or Jester could match here.
-                can_follow_suit = played_suit != Suit::None;
+                can_follow_suit = played_suit != Suit::Suitless;
             }
         }
     }
@@ -641,7 +639,7 @@ fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
 
             player.into()
         })
-        .collect::<Vec<Player>>()
+        .collect()
 }
 
 fn calc_final_score(mut players: Vec<Player>) -> Player {
@@ -713,7 +711,7 @@ mod tests {
         for _ in 0..3 {
             trick.push(Card {
                 rank: Rank::Wizard,
-                suit: Suit::None,
+                suit: Suit::Suitless,
             })
         }
         assert_eq!(0, calc_winner_of_trick(trump, &trick));
@@ -723,7 +721,7 @@ mod tests {
         for _ in 0..3 {
             trick.push(Card {
                 rank: Rank::Jester,
-                suit: Suit::None,
+                suit: Suit::Suitless,
             })
         }
         assert_eq!(0, calc_winner_of_trick(trump, &trick));
@@ -750,14 +748,14 @@ mod tests {
         assert_eq!(5, calc_winner_of_trick(trump, &trick));
 
         // If there is no trump then highest lead suit wins.
-        trump = Suit::None;
+        trump = Suit::Suitless;
         assert_eq!(4, calc_winner_of_trick(trump, &trick));
 
         // Make sure second Jester doesn't mess up lead suit.
         trick = vec![
             Card {
                 rank: Rank::Jester,
-                suit: Suit::None,
+                suit: Suit::Suitless,
             },
             Card {
                 rank: Rank::Five,
@@ -765,7 +763,7 @@ mod tests {
             },
             Card {
                 rank: Rank::Jester,
-                suit: Suit::None,
+                suit: Suit::Suitless,
             },
             Card {
                 rank: Rank::King,
@@ -810,38 +808,30 @@ mod tests {
     fn test_set_trump() {
         let dealer = Player::new();
 
-        // On last round deck will be empty, trump should be null card.
-        let mut deck: Vec<Card> = Vec::new();
-        let mut trump = set_trump(deck.pop(), &dealer);
-        assert_eq!(trump, Card::new());
-
         // Normal card should be returned as trump.
         let two_of_hearts = Card {
             rank: Rank::Two,
             suit: Suit::Heart,
         };
-        deck.push(two_of_hearts.clone());
-        trump = set_trump(deck.pop(), &dealer);
+        let mut trump = set_trump(two_of_hearts, &dealer);
         assert_eq!(trump, two_of_hearts);
 
         // Nothing special happens for Jester, returned like normal card.
         let jester = Card {
             rank: Rank::Jester,
-            suit: Suit::None,
+            suit: Suit::Suitless,
         };
-        deck.push(jester.clone());
-        trump = set_trump(deck.pop(), &dealer);
+        trump = set_trump(jester, &dealer);
         assert_eq!(trump, jester);
 
         // If Wizard is flipped the dealer should choose a suit for trump.
         let wizard = Card {
             rank: Rank::Wizard,
-            suit: Suit::None,
+            suit: Suit::Suitless,
         };
-        deck.push(wizard);
-        trump = set_trump(deck.pop(), &dealer);
+        trump = set_trump(wizard, &dealer);
         assert_eq!(trump.rank, Rank::Wizard);
-        assert_ne!(trump.suit, Suit::None);
+        assert_ne!(trump.suit, Suit::Suitless);
     }
 
     #[test]
