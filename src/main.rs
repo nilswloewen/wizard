@@ -245,6 +245,11 @@ impl From<&mut Player> for Player {
     }
 }
 
+struct CardPlayed {
+    card: Card,
+    player: Player,
+}
+
 struct Util;
 impl Util {
     fn print_wizard_ascii_art() {
@@ -505,11 +510,22 @@ fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
             trick.push(played_card);
         }
 
+        let mut cards_played: Vec<CardPlayed> = Vec::new();
+        for i in 0..trick.len() {
+            cards_played.push(CardPlayed {
+                card: trick[i],
+                player: players[i].clone(),
+            })
+        }
+        cards_played.iter().for_each(|played| {
+            println!("card: {}, player: {}", played.card, played.player.name);
+        });
+
         let winner = calc_winner_of_trick(trump.suit, &trick);
         players[winner].tricks += 1;
         println!(
             "\n  Winner: {} - {}\n========================",
-            trick[winner], players[winner].name
+            winner, players[winner].name
         );
 
         // Winner of trick should lead next trick.
