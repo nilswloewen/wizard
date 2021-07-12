@@ -20,7 +20,7 @@ impl Suit {
             Suit::Diamond => '♦',
             Suit::Heart => '♥',
             Suit::Spade => '♠',
-            Suit::Suitless => '~',
+            Suit::Suitless => ' ',
         }
     }
 }
@@ -188,10 +188,7 @@ enum Operator {
 #[derive(Clone)]
 struct Player {
     name: String,
-    // The possible score range is -210..250. i16 is perfect for this.
     score: i16,
-    // Bet and tricks have a range of 0..20, u5 would do.
-    // Todo: Bring in external crate uX https://docs.rs/crate/ux/0.1.3t.
     bet: u8,
     tricks: u8,
     hand: Deck,
@@ -331,13 +328,13 @@ fn main() {
         players.rotate_left(1);
 
         // Deal cards and reset stats.
-        for i in 0..players.len() {
-            players[i].hand.cards.clear();
-            players[i].tricks = 0;
+        players.iter_mut().for_each(|player| {
+            player.hand.cards.clear();
+            player.tricks = 0;
             for _ in 0..round_num {
-                players[i].hand.cards.push(deck.pop().unwrap());
+                player.hand.cards.push(deck.pop().unwrap());
             }
-        }
+        });
 
         println!(
             "\n--- Round {:>2} --- \nDealer: {} \nLeader: {}",
@@ -534,9 +531,10 @@ fn play_trick_for_human(player: &Player, lead_suit: Suit) -> usize {
         if !can_follow_suit {
             let played_suit = player.hand.cards[i].suit;
             if played_suit == lead_suit {
-                // Not Suit::None is needed because lead_suit is initialized
-                // as Suit::None and it's possible a Wizard or Jester could match here.
+                // Not Suit::Suitless is needed because lead_suit is initialized
+                // as Suit::Suitless and it's possible a Wizard or Jester could match here.
                 can_follow_suit = played_suit != Suit::Suitless;
+                break;
             }
         }
     }
