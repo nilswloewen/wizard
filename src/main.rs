@@ -2,6 +2,7 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
 use std::fmt;
+use std::fmt::Formatter;
 use std::io;
 use std::{thread, time};
 
@@ -123,7 +124,7 @@ struct Deck {
     cards: Vec<Card>,
 }
 impl Deck {
-    pub fn new() -> Vec<Card> {
+    pub fn new() -> Deck {
         let mut deck: Vec<Card> = Vec::new();
 
         // Build normal 52 card deck.
@@ -154,17 +155,9 @@ impl Deck {
             deck.push(JESTER);
         }
 
-        deck
+        Deck { cards: deck }
     }
 
-    // Todo: Make shuffle generic so both Card and Player can use it.
-    pub fn shuffle(mut deck: Vec<Card>) -> Vec<Card> {
-        let deck_slice = deck.as_mut_slice();
-        let mut rng = thread_rng();
-        deck_slice.shuffle(&mut rng);
-
-        deck_slice.to_vec()
-    }
 }
 impl fmt::Display for Deck {
     // Return space " " separated list of cards.
@@ -203,23 +196,14 @@ impl Player {
             score: 0,
             bet: 0,
             tricks: 0,
-            hand: Deck { cards: Vec::new() },
+            hand: Deck::new(),
             operator: Operator::Computer,
             original_position: 0,
         }
     }
 
-    pub fn shuffle(mut players: Vec<Player>) -> Vec<Player> {
-        let players_slice = players.as_mut_slice();
-        let mut rng = thread_rng();
-        players_slice.shuffle(&mut rng);
-
-        players_slice.to_vec()
-    }
-
     fn print_names(players: &Vec<Player>) {
-        println!();
-        println!(" Players");
+        println!("\n Players");
         println!(" -------");
 
         players.iter().for_each(|player| {
@@ -228,8 +212,7 @@ impl Player {
     }
 
     fn print_score(players: &Vec<Player>) {
-        println!();
-        println!(" Name    Score   Bet   Tricks");
+        println!("\n Name    Score   Bet   Tricks");
         println!(" ----------------------------");
         players.iter().for_each(|player| {
             println!(
@@ -254,8 +237,23 @@ impl Play {
     }
 }
 
+struct VecUtil<T: fmt::Display>(Vec<T>);
+impl<T: fmt::Display> fmt::Display for VecUtil<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
 struct Util;
 impl Util {
+    fn shuffle<T: std::clone::Clone>(mut items: Vec<T>) -> Vec<T> {
+        let slice = items.as_mut_slice();
+        let mut rng = thread_rng();
+        slice.shuffle(&mut rng);
+
+        slice.to_vec()
+    }
+
     fn print_wizard_ascii_art() {
         println!("           _                  _\n          (_)                | |\n __      ___ ______ _ _ __ __| |\n \\ \\ /\\ / / |_  / _` | \'__/ _` |\n  \\ V  V /| |/ / (_| | | | (_| |\n   \\_/\\_/ |_/___\\__,_|_|  \\__,_|\n");
     }
@@ -313,7 +311,7 @@ impl Util {
 fn main() {
     Util::print_wizard_ascii_art();
 
-    let new_deck = Deck { cards: Deck::new() };
+    let new_deck = Deck::new();
 
     let mut players = get_players();
     Player::print_names(&players);
@@ -325,7 +323,7 @@ fn main() {
     let num_rounds = 3;
 
     for round_num in 1..(num_rounds + 1) {
-        let mut deck = Deck::shuffle(new_deck.cards.clone());
+        let mut deck = Util::shuffle(new_deck.cards.clone());
 
         // Get players and rotate dealer.
         let player_rotation = round_num - 1 % players.len();
@@ -409,7 +407,7 @@ fn get_players() -> Vec<Player> {
         });
     }
 
-    Player::shuffle(players)
+    Util::shuffle(players)
 }
 
 fn set_trump(mut card: Card, dealer: &Player) -> Card {
@@ -671,7 +669,7 @@ mod tests {
     #[test]
     fn test_build_deck() {
         let deck = Deck::new();
-        assert_eq!(60, deck.len());
+        assert_eq!(60, deck.cards.len());
     }
 
     #[test]
