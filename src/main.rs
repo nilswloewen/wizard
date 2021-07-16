@@ -239,12 +239,6 @@ impl Player {
         });
     }
 }
-impl From<&mut Player> for Player {
-    fn from(player: &mut Player) -> Self {
-        // Is there a better way to do this? I don't need to clone the Player, I just want to make it non-mutable.
-        player.clone()
-    }
-}
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 struct Play {
@@ -571,7 +565,7 @@ fn play_trick_for_human(player: &mut Player, lead_suit: Suit) -> Play {
 
         return Play {
             card,
-            player: player.into(),
+            player: player.clone(),
         };
     }
 }
@@ -595,7 +589,7 @@ fn play_trick_for_computer(player: &mut Player, lead_suit: Suit) -> Play {
             .drain(selected..(selected + 1))
             .last()
             .unwrap(),
-        player: player.into(),
+        player: player.clone(),
     }
 }
 
@@ -749,14 +743,14 @@ mod tests {
         }));
         assert_eq!(trick[4], calc_winner_of_trick(Suit::Spade, trick.clone()));
 
-        // // Trump still wins.
+        // Trump still wins.
         trick.push(Play::from(Card {
             rank: Rank::Two,
             suit: Suit::Spade,
         }));
         assert_eq!(trick[5], calc_winner_of_trick(Suit::Spade, trick.clone()));
 
-        // // If there is no trump then highest lead suit wins.
+        // If there is no trump then highest lead suit wins.
         assert_eq!(
             trick[4],
             calc_winner_of_trick(Suit::Suitless, trick.clone())
