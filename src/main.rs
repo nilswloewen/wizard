@@ -157,7 +157,6 @@ impl Deck {
 
         Deck { cards: deck }
     }
-
 }
 impl fmt::Display for Deck {
     // Return space " " separated list of cards.
@@ -381,7 +380,7 @@ fn main() {
         Util::press_enter_to_("start next round");
     }
 
-    let winner = calc_final_score(players);
+    let winner = calc_winner(players);
     println!(
         "{} is the winner with {} points!",
         winner.name, winner.score
@@ -592,8 +591,9 @@ fn play_trick_for_computer(player: &mut Player, lead_suit: Suit) -> Play {
 }
 
 fn calc_winner_of_trick(trump_suit: Suit, mut trick: Vec<Play>) -> Play {
-    let mut winner = trick.drain(0..1).last().unwrap();
-    let mut lead_suit = winner.card.suit;
+    let first_card = trick.drain(0..1).last().unwrap();
+    let mut lead_suit = first_card.card.suit;
+    let mut winning = first_card;
 
     for current in trick {
         if current.card == WIZARD {
@@ -604,18 +604,18 @@ fn calc_winner_of_trick(trump_suit: Suit, mut trick: Vec<Play>) -> Play {
         }
 
         // If Jester was led take suit from first non-Jester.
-        if winner.card == JESTER {
+        if winning.card == JESTER {
             if current.card != JESTER {
-                winner = current;
-                lead_suit = winner.card.suit;
+                winning = current;
+                lead_suit = winning.card.suit;
                 continue;
             }
         }
 
-        if winner.card.suit == trump_suit {
+        if winning.card.suit == trump_suit {
             if current.card.suit == trump_suit {
-                if current.card.rank.value() > winner.card.rank.value() {
-                    winner = current;
+                if current.card.rank.value() > winning.card.rank.value() {
+                    winning = current;
                     continue;
                 }
             }
@@ -623,19 +623,19 @@ fn calc_winner_of_trick(trump_suit: Suit, mut trick: Vec<Play>) -> Play {
         }
 
         if current.card.suit == trump_suit {
-            winner = current;
+            winning = current;
             continue;
         }
 
         // Follow suit...
         if current.card.suit == lead_suit {
-            if current.card.rank.value() > winner.card.rank.value() {
-                winner = current;
+            if current.card.rank.value() > winning.card.rank.value() {
+                winning = current;
             }
         }
     }
 
-    winner
+    winning
 }
 
 fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
@@ -651,7 +651,7 @@ fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
     players
 }
 
-fn calc_final_score(mut players: Vec<Player>) -> Player {
+fn calc_winner(mut players: Vec<Player>) -> Player {
     let mut winner = players.pop().unwrap();
     for player in players {
         if player.score > winner.score {
@@ -838,7 +838,7 @@ mod tests {
         players[5].score = 0;
 
         // For now if there is a tie the player first in rotation will win.
-        let winner = calc_final_score(players.clone());
+        let winner = calc_winner(players.clone());
         assert_eq!(players[3].score, winner.score);
     }
 }
