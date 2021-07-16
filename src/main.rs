@@ -550,7 +550,6 @@ fn play_trick_for_human(player: &Player, lead_suit: Suit) -> usize {
                 // Not Suit::Suitless is needed because lead_suit is initialized
                 // as Suit::Suitless and it's possible a Wizard or Jester could match here.
                 can_follow_suit = played_suit != Suit::Suitless;
-                break;
             }
         }
     }
