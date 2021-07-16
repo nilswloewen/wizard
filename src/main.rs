@@ -4,6 +4,7 @@ use rand::Rng;
 use std::fmt;
 use std::fmt::Formatter;
 use std::io;
+use std::ops;
 use std::{thread, time};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -120,9 +121,7 @@ const JESTER: Card = Card {
 };
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-struct Deck {
-    cards: Vec<Card>,
-}
+struct Deck(pub Vec<Card>);
 impl Deck {
     pub fn new() -> Deck {
         let mut deck: Vec<Card> = Vec::new();
@@ -155,20 +154,46 @@ impl Deck {
             deck.push(JESTER);
         }
 
-        Deck { cards: deck }
+        Deck(deck)
     }
 }
 impl fmt::Display for Deck {
     // Return space " " separated list of cards.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut card_names = String::new();
-        for card in self.cards.as_slice() {
+        for card in self.as_slice() {
             card_names.push_str(card.rank.symbol());
             card_names.push(card.suit.symbol());
             card_names.push_str(" ")
         }
 
         write!(f, "{}", card_names)
+    }
+}
+impl ops::Deref for Deck {
+    type Target = Vec<Card>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl ops::DerefMut for Deck {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.as_mut()
+    }
+}
+
+struct Cards(pub Vec<Card>);
+impl ops::Deref for Cards {
+    type Target = Vec<Card>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl fmt::Display for Cards {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.iter().fold(Ok(()), |result, card| {
+            result.and_then(|_| writeln!(f, "{}", card))
+        })
     }
 }
 
@@ -318,11 +343,11 @@ fn main() {
     Util::press_enter_to_("start first round");
 
     // ** Short game for demo purposes. **
-    // let num_rounds = new_deck.cards.len() / players.len();
+    // let num_rounds = new_deck.len() / players.len();
     let num_rounds = 3;
 
     for round_num in 1..(num_rounds + 1) {
-        let mut deck = Util::shuffle(new_deck.cards.clone());
+        let mut deck = Util::shuffle(*new_deck.clone());
 
         // Get players and rotate dealer.
         let player_rotation = round_num - 1 % players.len();
@@ -335,10 +360,10 @@ fn main() {
 
         // Deal cards and reset stats.
         players.iter_mut().for_each(|player| {
-            player.hand.cards.clear();
+            player.hand.clear();
             player.tricks = 0;
             for _ in 0..round_num {
-                player.hand.cards.push(deck.pop().unwrap());
+                player.hand.push(deck.pop().unwrap());
             }
         });
 
@@ -449,7 +474,7 @@ fn set_trump(mut card: Card, dealer: &Player) -> Card {
 
 fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
     for mut player in players.iter_mut() {
-        let max_bet = player.hand.cards.len();
+        let max_bet = player.hand.len();
 
         match player.operator {
             Operator::Human => {
@@ -479,7 +504,7 @@ fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
 }
 
 fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
-    for trick_num in 1..(players[0].hand.cards.len() + 1) {
+    for trick_num in 1..(players[0].hand.len() + 1) {
         println!("======= Trick #{} =======", trick_num);
         let mut lead_suit = Suit::Suitless;
         let mut trick: Vec<Play> = Vec::new();
@@ -523,7 +548,7 @@ fn play_trick_for_human(player: &mut Player, lead_suit: Suit) -> Play {
     let mut can_follow_suit = false;
 
     println!("\nYour hand:");
-    for (index, card) in player.hand.cards.iter().enumerate() {
+    for (index, card) in player.hand.iter().enumerate() {
         println!("  {}. {}", index + 1, card);
         if !can_follow_suit {
             if card.suit == lead_suit {
@@ -540,14 +565,13 @@ fn play_trick_for_human(player: &mut Player, lead_suit: Suit) -> Play {
     loop {
         let selection = Util::cli_next_pos_num() as usize - 1;
 
-        if selection >= player.hand.cards.len() {
+        if selection >= player.hand.len() {
             println!("Hey! Gotta pick what's offered!");
             continue;
         }
 
         let card = player
             .hand
-            .cards
             .drain(selection..(selection + 1))
             .last()
             .unwrap();
@@ -555,7 +579,7 @@ fn play_trick_for_human(player: &mut Player, lead_suit: Suit) -> Play {
         if can_follow_suit {
             if card.suit != lead_suit {
                 println!("Hey! Gotta follow suit!");
-                player.hand.cards.insert(selection, card);
+                player.hand.insert(selection, card);
                 continue;
             }
         }
@@ -572,7 +596,7 @@ fn play_trick_for_computer(player: &mut Player, lead_suit: Suit) -> Play {
 
     // Play first card in hand if suit cannot be followed.
     let mut selected = 0;
-    for (index, card) in player.hand.cards.iter().enumerate() {
+    for (index, card) in player.hand.iter().enumerate() {
         if card.suit == lead_suit {
             selected = index;
             break;
@@ -580,12 +604,7 @@ fn play_trick_for_computer(player: &mut Player, lead_suit: Suit) -> Play {
     }
 
     Play {
-        card: player
-            .hand
-            .cards
-            .drain(selected..(selected + 1))
-            .last()
-            .unwrap(),
+        card: player.hand.drain(selected..(selected + 1)).last().unwrap(),
         player: player.clone(),
     }
 }
@@ -669,7 +688,7 @@ mod tests {
     #[test]
     fn test_build_deck() {
         let deck = Deck::new();
-        assert_eq!(60, deck.cards.len());
+        assert_eq!(60, deck.len());
     }
 
     #[test]
