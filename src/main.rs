@@ -337,6 +337,7 @@ fn main() {
                 break;
             }
         }
+
         let trump = match deck.pop() {
             Some(card) => set_trump(card, &dealer),
             None => {
@@ -348,11 +349,11 @@ fn main() {
 
         Util::press_enter_to_("start betting");
 
-        players = place_bets(players);
+        place_bets(&mut players);
         Util::press_enter_to_("play first trick");
 
         players = play_tricks(players, trump);
-        players = calc_score(players);
+        calc_score(&mut players);
 
         // Reset player order to original so scoreboard and dealer rotation are consistent.
         while players[0].original_position != 0 {
@@ -432,8 +433,8 @@ fn set_trump(mut card: Card, dealer: &Player) -> Card {
     card
 }
 
-fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
-    for mut player in players.iter_mut() {
+fn place_bets(players: &mut Vec<Player>) {
+    for player in players.iter_mut() {
         let max_bet = player.hand.len();
 
         match player.operator {
@@ -460,7 +461,6 @@ fn place_bets(mut players: Vec<Player>) -> Vec<Player> {
 
         println!("{:>8} bet {}", player.name, player.bet);
     }
-    players
 }
 
 fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
@@ -617,8 +617,8 @@ fn calc_winner_of_trick(trump_suit: Suit, mut trick: Vec<Play>) -> Play {
     winning
 }
 
-fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
-    for mut player in &mut players {
+fn calc_score(players: &mut Vec<Player>) {
+    for mut player in players {
         if player.tricks == player.bet {
             player.score += (2 + player.bet) as i16;
             continue;
@@ -627,7 +627,6 @@ fn calc_score(mut players: Vec<Player>) -> Vec<Player> {
         let penalty = player.bet as i16 - player.tricks as i16;
         player.score -= penalty.abs();
     }
-    players
 }
 
 fn calc_winner(mut players: Vec<Player>) -> Player {
@@ -774,7 +773,7 @@ mod tests {
         player.tricks = 2;
         players.push(player.clone());
 
-        players = calc_score(players);
+        calc_score(&mut players);
         assert_eq!(players[0].score, 2);
         assert_eq!(players[1].score, -1);
         assert_eq!(players[2].score, -1);
