@@ -2,7 +2,6 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
 use std::fmt;
-use std::fmt::Formatter;
 use std::io;
 use std::ops;
 use std::{thread, time};
@@ -24,11 +23,6 @@ impl Suit {
             Suit::Spade => '♠',
             Suit::Suitless => ' ',
         }
-    }
-}
-impl fmt::Display for Suit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", Suit::symbol(*self))
     }
 }
 
@@ -90,11 +84,6 @@ impl Rank {
         }
     }
 }
-impl fmt::Display for Rank {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:>2}", Rank::symbol(*self))
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct Card {
@@ -121,9 +110,9 @@ const JESTER: Card = Card {
 };
 
 #[derive(Clone, Eq, PartialEq, Debug)]
-struct Deck(pub Vec<Card>);
+struct Deck(Vec<Card>);
 impl Deck {
-    pub fn new() -> Deck {
+    fn build() -> Deck {
         let mut deck: Vec<Card> = Vec::new();
 
         // Build normal 52 card deck.
@@ -160,14 +149,9 @@ impl Deck {
 impl fmt::Display for Deck {
     // Return space " " separated list of cards.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut card_names = String::new();
-        for card in self.as_slice() {
-            card_names.push_str(card.rank.symbol());
-            card_names.push(card.suit.symbol());
-            card_names.push_str(" ")
-        }
-
-        write!(f, "{}", card_names)
+        self.iter().fold(Ok(()), |result, card| {
+            result.and_then(|_| write!(f, "{} ", card))
+        })
     }
 }
 impl ops::Deref for Deck {
@@ -179,21 +163,6 @@ impl ops::Deref for Deck {
 impl ops::DerefMut for Deck {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.as_mut()
-    }
-}
-
-struct Cards(pub Vec<Card>);
-impl ops::Deref for Cards {
-    type Target = Vec<Card>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl fmt::Display for Cards {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.iter().fold(Ok(()), |result, card| {
-            result.and_then(|_| writeln!(f, "{}", card))
-        })
     }
 }
 
@@ -220,7 +189,7 @@ impl Player {
             score: 0,
             bet: 0,
             tricks: 0,
-            hand: Deck::new(),
+            hand: Deck(Vec::new()),
             operator: Operator::Computer,
             original_position: 0,
         }
@@ -253,6 +222,7 @@ struct Play {
     player: Player,
 }
 impl Play {
+    #[allow(dead_code)] // from() is only used in tests.
     fn from(card: Card) -> Play {
         Play {
             card,
@@ -261,16 +231,9 @@ impl Play {
     }
 }
 
-struct VecUtil<T: fmt::Display>(Vec<T>);
-impl<T: fmt::Display> fmt::Display for VecUtil<T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
-    }
-}
-
 struct Util;
 impl Util {
-    fn shuffle<T: std::clone::Clone>(mut items: Vec<T>) -> Vec<T> {
+    fn shuffle_vec<T: std::clone::Clone>(mut items: Vec<T>) -> Vec<T> {
         let slice = items.as_mut_slice();
         let mut rng = thread_rng();
         slice.shuffle(&mut rng);
@@ -335,19 +298,16 @@ impl Util {
 fn main() {
     Util::print_wizard_ascii_art();
 
-    let new_deck = Deck::new();
+    let new_deck = Deck::build();
 
     let mut players = get_players();
     Player::print_names(&players);
 
     Util::press_enter_to_("start first round");
 
-    // ** Short game for demo purposes. **
-    // let num_rounds = new_deck.len() / players.len();
-    let num_rounds = 3;
-
+    let num_rounds = new_deck.len() / players.len();
     for round_num in 1..(num_rounds + 1) {
-        let mut deck = Util::shuffle(*new_deck.clone());
+        let mut deck = Deck(Util::shuffle_vec(new_deck.0.clone()));
 
         // Get players and rotate dealer.
         let player_rotation = round_num - 1 % players.len();
@@ -431,7 +391,7 @@ fn get_players() -> Vec<Player> {
         });
     }
 
-    Util::shuffle(players)
+    Util::shuffle_vec(players)
 }
 
 fn set_trump(mut card: Card, dealer: &Player) -> Card {
@@ -445,7 +405,7 @@ fn set_trump(mut card: Card, dealer: &Player) -> Card {
             Operator::Human => {
                 println!("Which suit do you select as trump?");
                 for i in 0..suits.len() {
-                    println!("  {}. {}", i + 1, suits[i]);
+                    println!("  {}. {}", i + 1, suits[i].symbol());
                 }
 
                 loop {
@@ -467,7 +427,7 @@ fn set_trump(mut card: Card, dealer: &Player) -> Card {
             }
         };
 
-        println!("\n Trump suit: {}", card.suit);
+        println!("\n Trump suit: {}", card.suit.symbol());
     }
     card
 }
@@ -687,7 +647,7 @@ mod tests {
 
     #[test]
     fn test_build_deck() {
-        let deck = Deck::new();
+        let deck = Deck::build();
         assert_eq!(60, deck.len());
     }
 
