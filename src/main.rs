@@ -352,7 +352,7 @@ fn main() {
         place_bets(&mut players);
         Util::press_enter_to_("play first trick");
 
-        players = play_tricks(players, trump);
+        play_tricks(&mut players, trump);
         calc_score(&mut players);
 
         // Reset player order to original so scoreboard and dealer rotation are consistent.
@@ -463,17 +463,17 @@ fn place_bets(players: &mut Vec<Player>) {
     }
 }
 
-fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
+fn play_tricks(players: &mut Vec<Player>, trump: Card) {
     for trick_num in 1..(players[0].hand.len() + 1) {
         println!("======= Trick #{} =======", trick_num);
         let mut lead_suit = Suit::Suitless;
         let mut trick: Vec<Play> = Vec::new();
 
-        players.iter_mut().for_each(|player| {
+        for player in players.iter_mut() {
             // Get lead suit from first non-Jester in trick.
-            for played in trick.iter() {
-                if lead_suit == Suit::Suitless && played.card.suit != Suit::Suitless {
-                    lead_suit = played.card.suit.clone();
+            for current in trick.iter() {
+                if lead_suit == Suit::Suitless && current.card.suit != Suit::Suitless {
+                    lead_suit = current.card.suit.clone();
                     break;
                 }
             }
@@ -485,7 +485,7 @@ fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
 
             println!("{:>8}: {}", played.player.name, played.card);
             trick.push(played);
-        });
+        }
 
         let mut winning_play = calc_winner_of_trick(trump.suit, trick);
 
@@ -500,21 +500,21 @@ fn play_tricks(mut players: Vec<Player>, trump: Card) -> Vec<Player> {
 
         Util::press_enter_to_("play next trick");
     }
-
-    players
 }
 
 fn play_trick_for_human(player: &mut Player, lead_suit: Suit) -> Play {
-    let mut can_follow_suit = false;
-
     println!("\nYour hand:");
     for (index, card) in player.hand.iter().enumerate() {
         println!("  {}. {}", index + 1, card);
-        if !can_follow_suit {
+    }
+
+    let mut can_follow_suit = false;
+
+    // Not Suit::Suitless is needed because lead_suit is initialized as Suit::Suitless and it's possible a Wizard or Jester could match here.
+    if lead_suit == Suit::Suitless {
+        for card in player.hand.iter() {
             if card.suit == lead_suit {
-                // Not Suit::Suitless is needed because lead_suit is initialized
-                // as Suit::Suitless and it's possible a Wizard or Jester could match here.
-                can_follow_suit = card.suit != Suit::Suitless;
+                can_follow_suit = true;
                 break;
             }
         }
