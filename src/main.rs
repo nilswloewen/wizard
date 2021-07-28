@@ -1,5 +1,3 @@
-#![feature(in_band_lifetimes)]
-
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use rand::Rng;
@@ -218,20 +216,20 @@ impl Player {
     }
 }
 
-#[derive(Eq, PartialEq, Debug)]
-struct Play<'a> {
+#[derive(Clone, Eq, PartialEq, Debug)]
+struct Play {
     card: Card,
-    player: &'a mut Player,
+    player: Player,
 }
-// impl Play<'a> {
-//     #[allow(dead_code)] // from() is only used in tests.
-//     fn from<'a>(card: Card) -> Play<'a> {
-//         Play {
-//             card,
-//             player: &mut Player::new(),
-//         }
-//     }
-// }
+impl Play {
+    #[allow(dead_code)] // from() is only used in tests.
+    fn from(card: Card) -> Play {
+        Play {
+            card,
+            player: Player::new(),
+        }
+    }
+}
 
 struct Util;
 impl Util {
@@ -312,8 +310,8 @@ fn main() {
         let mut deck = Deck(Util::shuffle_vec(new_deck.0.clone()));
 
         // Get players and rotate dealer.
-        let rotation = round_num - 1 % players.len();
-        players.rotate_left(rotation);
+        let player_rotation = round_num - 1 % players.len();
+        players.rotate_left(player_rotation);
         let dealer = players[0].clone();
         let leader = players[1].clone();
 
@@ -321,13 +319,13 @@ fn main() {
         players.rotate_left(1);
 
         // Deal cards and reset stats.
-        for player in players.iter_mut() {
+        players.iter_mut().for_each(|player| {
             player.hand.clear();
             player.tricks = 0;
             for _ in 0..round_num {
                 player.hand.push(deck.pop().unwrap());
             }
-        }
+        });
 
         println!(
             "\n--- Round {:>2} --- \nDealer: {} \nLeader: {}",
@@ -355,24 +353,24 @@ fn main() {
         Util::press_enter_to_("play first trick");
 
         play_tricks(&mut players, trump);
-        //     calc_score(&mut players);
-        //
-        //     // Reset player order to original so scoreboard and dealer rotation are consistent.
-        //     while players[0].original_position != 0 {
-        //         players.rotate_left(1);
-        //     }
-        //
-        //     println!("End of round #{} - Current standings:", round_num);
-        //     Player::print_score(&players);
-        //
-        //     Util::press_enter_to_("start next round");
+        calc_score(&mut players);
+
+        // Reset player order to original so scoreboard and dealer rotation are consistent.
+        while players[0].original_position != 0 {
+            players.rotate_left(1);
+        }
+
+        println!("End of round #{} - Current standings:", round_num);
+        Player::print_score(&players);
+
+        Util::press_enter_to_("start next round");
     }
-    //
-    // let winner = calc_winner(players);
-    // println!(
-    //     "{} is the winner with {} points!",
-    //     winner.name, winner.score
-    // );
+
+    let winner = calc_winner(players);
+    println!(
+        "{} is the winner with {} points!",
+        winner.name, winner.score
+    );
 }
 
 fn get_players() -> Vec<Player> {
@@ -548,7 +546,10 @@ fn get_play_from_human(player: &mut Player, lead_suit: Suit) -> Play {
             }
         }
 
-        return Play { card, player };
+        return Play {
+            card,
+            player: player.clone(),
+        };
     }
 }
 
@@ -564,8 +565,10 @@ fn get_play_from_comp(player: &mut Player, lead_suit: Suit) -> Play {
         }
     }
 
-    let card = player.hand.drain(selected..(selected + 1)).last().unwrap();
-    Play { card, player }
+    Play {
+        card: player.hand.drain(selected..(selected + 1)).last().unwrap(),
+        player: player.clone(),
+    }
 }
 
 fn calc_winner_of_trick(trump_suit: Suit, mut trick: Vec<Play>) -> Play {
@@ -649,112 +652,112 @@ mod tests {
         assert_eq!(60, deck.len());
     }
 
-    // #[test]
-    // fn test_calc_trick() {
-    //     let mut trick = vec![
-    //         Play::from(Card {
-    //             rank: Rank::Queen,
-    //             suit: Suit::Heart,
-    //         }),
-    //         Play::from(Card {
-    //             rank: Rank::King,
-    //             suit: Suit::Heart,
-    //         }),
-    //         Play::from(Card {
-    //             rank: Rank::Two,
-    //             suit: Suit::Heart,
-    //         }),
-    //     ];
-    //
-    //     // Test all non-trump, no Wizard or Jester.
-    //     assert_eq!(trick[1], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // Ace of lead suit should now win.
-    //     trick.push(Play::from(Card {
-    //         rank: Rank::Ace,
-    //         suit: Suit::Heart,
-    //     }));
-    //     assert_eq!(trick[3], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // Low Trump should now win.
-    //     trick.push(Play::from(Card {
-    //         rank: Rank::Two,
-    //         suit: Suit::Spade,
-    //     }));
-    //     assert_eq!(trick[4], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // Higher Trump should now win.
-    //     trick.push(Play::from(Card {
-    //         rank: Rank::Ace,
-    //         suit: Suit::Spade,
-    //     }));
-    //     assert_eq!(trick[5], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // First Wizard always wins.
-    //     trick.clear();
-    //     for _ in 0..3 {
-    //         trick.push(Play::from(WIZARD));
-    //     }
-    //     assert_eq!(trick[0], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // First Jester wins if all Jesters.
-    //     trick.clear();
-    //     for _ in 0..3 {
-    //         trick.push(Play::from(JESTER));
-    //     }
-    //     assert_eq!(trick[0], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // First non-Jester sets lead suit.
-    //     trick.push(Play::from(Card {
-    //         rank: Rank::Two,
-    //         suit: Suit::Diamond,
-    //     }));
-    //     assert_eq!(trick[3], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // New lead suit is now followed.
-    //     trick.push(Play::from(Card {
-    //         rank: Rank::Ace,
-    //         suit: Suit::Diamond,
-    //     }));
-    //     assert_eq!(trick[4], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // Trump still wins.
-    //     trick.push(Play::from(Card {
-    //         rank: Rank::Two,
-    //         suit: Suit::Spade,
-    //     }));
-    //     assert_eq!(trick[5], calc_winner_of_trick(Suit::Spade, trick.clone()));
-    //
-    //     // If there is no trump then highest lead suit wins.
-    //     assert_eq!(
-    //         trick[4],
-    //         calc_winner_of_trick(Suit::Suitless, trick.clone())
-    //     );
-    //
-    //     // Make sure second Jester doesn't mess up lead suit.
-    //     trick = vec![
-    //         Play::from(JESTER),
-    //         Play::from(Card {
-    //             rank: Rank::Five,
-    //             suit: Suit::Diamond,
-    //         }),
-    //         Play::from(JESTER),
-    //         Play::from(Card {
-    //             rank: Rank::King,
-    //             suit: Suit::Diamond,
-    //         }),
-    //         Play::from(Card {
-    //             rank: Rank::Ace,
-    //             suit: Suit::Heart,
-    //         }),
-    //         Play::from(Card {
-    //             rank: Rank::Ace,
-    //             suit: Suit::Diamond,
-    //         }),
-    //     ];
-    //
-    //     assert_eq!(trick[5], calc_winner_of_trick(Suit::Diamond, trick.clone()));
-    // }
+    #[test]
+    fn test_calc_trick() {
+        let mut trick = vec![
+            Play::from(Card {
+                rank: Rank::Queen,
+                suit: Suit::Heart,
+            }),
+            Play::from(Card {
+                rank: Rank::King,
+                suit: Suit::Heart,
+            }),
+            Play::from(Card {
+                rank: Rank::Two,
+                suit: Suit::Heart,
+            }),
+        ];
+
+        // Test all non-trump, no Wizard or Jester.
+        assert_eq!(trick[1], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // Ace of lead suit should now win.
+        trick.push(Play::from(Card {
+            rank: Rank::Ace,
+            suit: Suit::Heart,
+        }));
+        assert_eq!(trick[3], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // Low Trump should now win.
+        trick.push(Play::from(Card {
+            rank: Rank::Two,
+            suit: Suit::Spade,
+        }));
+        assert_eq!(trick[4], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // Higher Trump should now win.
+        trick.push(Play::from(Card {
+            rank: Rank::Ace,
+            suit: Suit::Spade,
+        }));
+        assert_eq!(trick[5], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // First Wizard always wins.
+        trick.clear();
+        for _ in 0..3 {
+            trick.push(Play::from(WIZARD));
+        }
+        assert_eq!(trick[0], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // First Jester wins if all Jesters.
+        trick.clear();
+        for _ in 0..3 {
+            trick.push(Play::from(JESTER));
+        }
+        assert_eq!(trick[0], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // First non-Jester sets lead suit.
+        trick.push(Play::from(Card {
+            rank: Rank::Two,
+            suit: Suit::Diamond,
+        }));
+        assert_eq!(trick[3], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // New lead suit is now followed.
+        trick.push(Play::from(Card {
+            rank: Rank::Ace,
+            suit: Suit::Diamond,
+        }));
+        assert_eq!(trick[4], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // Trump still wins.
+        trick.push(Play::from(Card {
+            rank: Rank::Two,
+            suit: Suit::Spade,
+        }));
+        assert_eq!(trick[5], calc_winner_of_trick(Suit::Spade, trick.clone()));
+
+        // If there is no trump then highest lead suit wins.
+        assert_eq!(
+            trick[4],
+            calc_winner_of_trick(Suit::Suitless, trick.clone())
+        );
+
+        // Make sure second Jester doesn't mess up lead suit.
+        trick = vec![
+            Play::from(JESTER),
+            Play::from(Card {
+                rank: Rank::Five,
+                suit: Suit::Diamond,
+            }),
+            Play::from(JESTER),
+            Play::from(Card {
+                rank: Rank::King,
+                suit: Suit::Diamond,
+            }),
+            Play::from(Card {
+                rank: Rank::Ace,
+                suit: Suit::Heart,
+            }),
+            Play::from(Card {
+                rank: Rank::Ace,
+                suit: Suit::Diamond,
+            }),
+        ];
+
+        assert_eq!(trick[5], calc_winner_of_trick(Suit::Diamond, trick.clone()));
+    }
 
     #[test]
     fn test_calc_score() {
