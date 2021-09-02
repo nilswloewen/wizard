@@ -11,13 +11,8 @@ Wizard is my favourite card game because you can win even when dealt bad cards -
 
 The goal of this project is for me to learn Rust lang. Wizard is a small, achievable goal. 
 
-### Goal 1: 
+### Demo: 
  - Terminal based 1 player game. &#x2705;
    
    ![game gif](wizard.gif) 
 
-### Goal 2: 
- - Web based game using [Rocket.rs](https://rocket.rs/).
-   
-### Goal 3: 
- - Web based game with client-side WASM written in Rust.
